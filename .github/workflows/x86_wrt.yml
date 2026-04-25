@@ -11,7 +11,6 @@ on:
         default: x64_immwrt
         options:
           - x64_immwrt
-          - x64_libwrt
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
