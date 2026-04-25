@@ -10,21 +10,9 @@ on:
         type: choice
         default: jdcloud_ipq60xx_immwrt
         options:
-          - aliyun_ap8220_immwrt
-          - cmcc_rax3000m_immwrt
-          - gemtek_w1701k_immwrt
           - jdcloud_ax6000_immwrt
           - jdcloud_ipq60xx_immwrt
           - jdcloud_ipq60xx_libwrt
-          - link_nn6000v2_immwrt
-          - linksys_mx4x00_immwrt
-          - qihoo_360v6_immwrt
-          - redmi_ax5_immwrt
-          - redmi_ax6_immwrt
-          - redmi_ax6_libwrt
-          - redmi_ax6000_immwrt21
-          - zn_m2_immwrt
-          - zn_m2_libwrt
           - x64_immwrt
 
 env:
@@ -54,7 +42,7 @@ jobs:
       - name: Set Build Date and Timezone
         run: |
           sudo -E timedatectl set-timezone "Asia/Shanghai"
-          export BUILD_DATE=$(TZ=UTC-8 date +"%y.%m.%d_%H.%M.%S")
+          export BUILD_DATE=$(TZ=UTC+8 date +"%y.%m.%d_%H.%M.%S")
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
 
       - name: Pre Clone

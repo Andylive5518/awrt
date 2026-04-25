@@ -98,6 +98,8 @@ main() {
     fix_opkg_check
     fix_quectel_cm
     install_pbr_cmcc
+    install_pbr_ctcc
+    install_pbr_cucc
     fix_pbr_ip_forward
     # apply_hash_fixes
 }

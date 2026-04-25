@@ -474,7 +474,7 @@ install_pbr_cmcc() {
         if [ -f "$pbr_makefile" ]; then
             if ! grep -q "pbr.user.cmcc" "$pbr_makefile"; then
                 echo "正在修改 PBR Makefile 添加安装规则..."
-                sed -i '/pbr.user.netflix.*\$(1)/a\
+                sed -i '/pbr.user.cmcc.*\$(1)/a\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc $(1)/usr/share/pbr/pbr.user.cmcc\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc6 $(1)/usr/share/pbr/pbr.user.cmcc6' "$pbr_makefile"
             fi
@@ -484,7 +484,7 @@ install_pbr_cmcc() {
     if [ -f "$pbr_conf" ]; then
         if ! grep -q "pbr.user.cmcc" "$pbr_conf"; then
             echo "正在添加 PBR CMCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
+            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.cmcc'/,/option enabled '0'/{
                 /option enabled '0'/a\\
 \\
 config include\\
@@ -493,6 +493,84 @@ config include\\
 \\
 config include\\
 	option path '/usr/share/pbr/pbr.user.cmcc6'\\
+	option enabled '0'
+            }" "$pbr_conf"
+        fi
+    fi
+}
+
+install_pbr_ctcc() {
+    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
+    local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
+    local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
+    local pbr_makefile="$pbr_pkg_dir/Makefile"
+
+    if [ -d "$pbr_pkg_dir" ]; then
+        echo "正在安装 PBR CTCC 配置文件..."
+        install -Dm644 "$BASE_PATH/patches/pbr.user.ctcc" "$pbr_dir/pbr.user.ctcc"
+        install -Dm644 "$BASE_PATH/patches/pbr.user.ctcc6" "$pbr_dir/pbr.user.ctcc6"
+
+        if [ -f "$pbr_makefile" ]; then
+            if ! grep -q "pbr.user.ctcc" "$pbr_makefile"; then
+                echo "正在修改 PBR Makefile 添加 CTCC 安装规则..."
+                sed -i '/pbr.user.cmcc6.*\$(1)/a\
+	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.ctcc $(1)/usr/share/pbr/pbr.user.ctcc\
+	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.ctcc6 $(1)/usr/share/pbr/pbr.user.ctcc6' "$pbr_makefile"
+            fi
+        fi
+    fi
+
+    if [ -f "$pbr_conf" ]; then
+        if ! grep -q "pbr.user.ctcc" "$pbr_conf"; then
+            echo "正在添加 PBR CTCC 配置条目..."
+            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.ctcc'/,/option enabled '0'/{
+                /option enabled '0'/a\\
+ \\
+config include\\
+	option path '/usr/share/pbr/pbr.user.ctcc'\\
+	option enabled '0'\\
+ \\
+config include\\
+	option path '/usr/share/pbr/pbr.user.ctcc6'\\
+	option enabled '0'
+            }" "$pbr_conf"
+        fi
+    fi
+}
+
+install_pbr_cucc() {
+    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
+    local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
+    local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
+    local pbr_makefile="$pbr_pkg_dir/Makefile"
+
+    if [ -d "$pbr_pkg_dir" ]; then
+        echo "正在安装 PBR CUCC 配置文件..."
+        install -Dm644 "$BASE_PATH/patches/pbr.user.cucc" "$pbr_dir/pbr.user.cucc"
+        install -Dm644 "$BASE_PATH/patches/pbr.user.cucc6" "$pbr_dir/pbr.user.cucc6"
+
+        if [ -f "$pbr_makefile" ]; then
+            if ! grep -q "pbr.user.cucc" "$pbr_makefile"; then
+                echo "正在修改 PBR Makefile 添加 CUCC 安装规则..."
+                sed -i '/pbr.user.ctcc6.*\$(1)/a\
+	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cucc $(1)/usr/share/pbr/pbr.user.cucc\
+	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cucc6 $(1)/usr/share/pbr/pbr.user.cucc6' "$pbr_makefile"
+            fi
+        fi
+    fi
+
+    if [ -f "$pbr_conf" ]; then
+        if ! grep -q "pbr.user.cucc" "$pbr_conf"; then
+            echo "正在添加 PBR CUCC 配置条目..."
+            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.cucc'/,/option enabled '0'/{
+                /option enabled '0'/a\\
+ \\
+config include\\
+	option path '/usr/share/pbr/pbr.user.cucc'\\
+	option enabled '0'\\
+ \\
+config include\\
+	option path '/usr/share/pbr/pbr.user.cucc6'\\
 	option enabled '0'
             }" "$pbr_conf"
         fi
