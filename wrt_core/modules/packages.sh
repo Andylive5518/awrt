@@ -78,12 +78,18 @@ install_small8() {
         luci-app-quickstart luci-app-istorex luci-app-cloudflarespeedtest netdata luci-app-netdata \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         tailscale luci-app-tailscale oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
-        msd_lite luci-app-msd_lite cups luci-app-cupsd
+        msd_lite luci-app-msd_lite cups luci-app-cupsd \
+        luci-app-fullconenat luci-app-partexp luci-app-momo
 }
 
 install_passwall() {
     echo "正在从官方仓库安装 luci-app-passwall..."
     ./scripts/feeds install -p passwall -f luci-app-passwall
+}
+
+install_passwall2() {
+    echo "正在从官方仓库安装 luci-app-passwall2..."
+    ./scripts/feeds install -p passwall2 -f luci-app-passwall2
 }
 
 install_nikki() {
