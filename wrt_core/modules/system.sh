@@ -195,7 +195,8 @@ update_tcping() {
 
 update_util_linux() {
     local util_linux_dir="$BUILD_DIR/package/utils/util-linux"
-    local zqin_url="https://github.com/ZqinKing/immortalwrt/raw/refs/heads/master/package/utils/util-linux"
+    local makefile_url="https://raw.githubusercontent.com/ZqinKing/immortalwrt/master/package/utils/util-linux/Makefile"
+    local tmp_makefile="/tmp/util-linux-Makefile-$$.mk"
 
     if [ ! -d "$util_linux_dir" ]; then
         echo "util-linux 目录不存在，跳过更新: $util_linux_dir"
@@ -204,12 +205,25 @@ update_util_linux() {
 
     echo "正在更新 util-linux..."
 
-    # 下载 ZqinKing 的 Makefile
-    local makefile_url="https://raw.githubusercontent.com/ZqinKing/immortalwrt/master/package/utils/util-linux/Makefile"
-    if ! curl -fsSL -o "$util_linux_dir/Makefile" "$makefile_url"; then
+    # 下载 ZqinKing 的 Makefile 到临时文件
+    if ! curl -fsSL -o "$tmp_makefile" "$makefile_url"; then
         echo "错误：从 $makefile_url 下载 util-linux Makefile 失败" >&2
+        rm -f "$tmp_makefile"
         return 1
     fi
+
+    # 校验版本：必须是 2.41.1 才使用
+    local ver
+    ver=$(grep -m1 "^PKG_VERSION" "$tmp_makefile" 2>/dev/null | sed 's/.*:=//' | tr -d ' ')
+    if [ "$ver" != "2.41.1" ]; then
+        echo "错误：ZqinKing 的 util-linux 版本已是 $ver（不是预期的 2.41.1），AT_HANDLE_FID 问题可能仍存在，停止更新。" >&2
+        echo "提示：请确认 ZqinKing 是否已同步上游，或手动检查 https://github.com/ZqinKing/immortalwrt/commits/master/package/utils/util-linux" >&2
+        rm -f "$tmp_makefile"
+        exit 1
+    fi
+
+    # 版本正确，应用更新
+    mv -f "$tmp_makefile" "$util_linux_dir/Makefile"
 
     # 下载 patches 目录（如果存在）
     local patches_dir="$util_linux_dir/patches"
@@ -218,13 +232,11 @@ update_util_linux() {
         local patches_json
         if patches_json=$(curl -fsSL "$zqin_patches_url" 2>/dev/null); then
             echo "正在更新 util-linux patches..."
-            # 保留本地额外添加的 patches，只更新来自 ZqinKing 的
-            # 先删除旧的 ZqinKing patches（如果是从 master 获取的）
             find "$patches_dir" -maxdepth 1 -type f -name "[0-9][0-9][0-9]-*.patch" -exec rm -f {} \; 2>/dev/null || true
         fi
     fi
 
-    echo "util-linux 已更新到 ZqinKing 版本 (2.41.1)"
+    echo "util-linux 已更新到 ZqinKing 版本 ($ver)"
 }
 
 set_custom_task() {
