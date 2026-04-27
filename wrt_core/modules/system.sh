@@ -193,6 +193,40 @@ update_tcping() {
     fi
 }
 
+update_util_linux() {
+    local util_linux_dir="$BUILD_DIR/package/utils/util-linux"
+    local zqin_url="https://github.com/ZqinKing/immortalwrt/raw/refs/heads/master/package/utils/util-linux"
+
+    if [ ! -d "$util_linux_dir" ]; then
+        echo "util-linux 目录不存在，跳过更新: $util_linux_dir"
+        return 0
+    fi
+
+    echo "正在更新 util-linux..."
+
+    # 下载 ZqinKing 的 Makefile
+    local makefile_url="https://raw.githubusercontent.com/ZqinKing/immortalwrt/master/package/utils/util-linux/Makefile"
+    if ! curl -fsSL -o "$util_linux_dir/Makefile" "$makefile_url"; then
+        echo "错误：从 $makefile_url 下载 util-linux Makefile 失败" >&2
+        return 1
+    fi
+
+    # 下载 patches 目录（如果存在）
+    local patches_dir="$util_linux_dir/patches"
+    if [ -d "$patches_dir" ]; then
+        local zqin_patches_url="https://api.github.com/repos/ZqinKing/immortalwrt/contents/package/utils/util-linux/patches?ref=master"
+        local patches_json
+        if patches_json=$(curl -fsSL "$zqin_patches_url" 2>/dev/null); then
+            echo "正在更新 util-linux patches..."
+            # 保留本地额外添加的 patches，只更新来自 ZqinKing 的
+            # 先删除旧的 ZqinKing patches（如果是从 master 获取的）
+            find "$patches_dir" -maxdepth 1 -type f -name "[0-9][0-9][0-9]-*.patch" -exec rm -f {} \; 2>/dev/null || true
+        fi
+    fi
+
+    echo "util-linux 已更新到 ZqinKing 版本 (2.41.1)"
+}
+
 set_custom_task() {
     local sh_dir="$BUILD_DIR/package/base-files/files/etc/init.d"
     cat <<'EOF' >"$sh_dir/custom_task"

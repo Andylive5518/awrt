@@ -58,6 +58,7 @@ main() {
     # fix_mkpkg_format_invalid
     change_cpuusage
     update_tcping
+    [ "$1" = "x64_immwrt" ] && update_util_linux
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks
