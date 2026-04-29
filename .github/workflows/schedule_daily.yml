@@ -13,7 +13,7 @@ on:
         options:
           - all
           - release_wrt
-          - x86_wrt
+          - x64_immwrt
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -33,7 +33,7 @@ jobs:
         run: |
           gh workflow run release_wrt.yml -f model=jdcloud_ipq60xx_immwrt --repo ${{ github.repository }}
 
-      - name: Trigger X86 WRT
-        if: inputs.model == 'all' || inputs.model == 'x86_wrt' || github.event_name == 'schedule'
+      - name: Trigger X64 WRT
+        if: inputs.model == 'all' || inputs.model == 'x64_immwrt' || github.event_name == 'schedule'
         run: |
-          gh workflow run x86_wrt.yml -f model=x64_immwrt --repo ${{ github.repository }}
+          gh workflow run release_wrt.yml -f model=x64_immwrt --repo ${{ github.repository }}
