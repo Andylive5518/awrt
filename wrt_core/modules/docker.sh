@@ -190,27 +190,27 @@ _docker_stack_update_dockerd_depends_block() {
             in_depends = 0
             replaced = 0
         }
-        /^  DEPENDS:=\$\(GO_ARCH_DEPENDS\) \\$/ {
+        /^[[:space:]]*DEPENDS:=\$\(ARCH_DEPENDS\) \\$/ {
             in_depends = 1
             replaced = 1
 
-            print "  DEPENDS:=$(GO_ARCH_DEPENDS) \\" 
-            print "    +ca-certificates \\" 
-            print "    +containerd \\" 
-            print "    +iptables-nft \\" 
-            print "    +iptables-mod-extra \\" 
-            print "    +IPV6:ip6tables-nft \\" 
-            print "    +IPV6:kmod-ipt-nat6 \\" 
-            print "    +KERNEL_SECCOMP:libseccomp \\" 
-            print "    +kmod-ipt-nat \\" 
-            print "    +kmod-ipt-physdev \\" 
-            print "    +kmod-nf-ipvs \\" 
-            print "    +kmod-veth \\" 
-            print "    +nftables \\" 
-            print "    +kmod-nft-nat \\" 
-            print "    +tini \\" 
-            print "    +uci-firewall \\" 
-            print "    @!(mips||mips64||mipsel)"
+            print " DEPENDS:=$(ARCH_DEPENDS) \\"
+            print "  +ca-certificates \\"
+            print "  +containerd \\"
+            print "  +iptables-nft \\"
+            print "  +iptables-mod-extra \\"
+            print "  +IPV6:ip6tables-nft \\"
+            print "  +IPV6:kmod-ipt-nat6 \\"
+            print "  +KERNEL_SECCOMP:libseccomp \\"
+            print "  +kmod-ipt-nat \\"
+            print "  +kmod-ipt-physdev \\"
+            print "  +kmod-nf-ipvs \\"
+            print "  +kmod-veth \\"
+            print "  +nftables \\"
+            print "  +kmod-nft-nat \\"
+            print "  +tini \\"
+            print "  +uci-firewall \\"
+            print "  @!(mips||mips64||mipsel)"
             next
         }
         in_depends {
