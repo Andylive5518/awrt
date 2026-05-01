@@ -101,6 +101,9 @@ main() {
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
+    change_hostname_to_awrt
+    enable_ttyd_autologin
+    set_distrib_description
     fix_pbr_ip_forward
     # apply_hash_fixes
 }

@@ -519,8 +519,9 @@ install_pbr_cmcc() {
 
         if [ -f "$pbr_makefile" ]; then
             if ! grep -q "pbr.user.cmcc" "$pbr_makefile"; then
-                echo "正在修改 PBR Makefile 添加安装规则..."
-                sed -i '/pbr.user.cmcc.*\$(1)/a\
+                echo "正在修改 PBR Makefile 添加 CMCC 安装规则..."
+                # 原版 Makefile install 块以 pbr.user.netflix 为最后一行，以此为锚点追加
+                sed -i '/pbr\.user\.netflix.*\$(1)/a\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc $(1)/usr/share/pbr/pbr.user.cmcc\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc6 $(1)/usr/share/pbr/pbr.user.cmcc6' "$pbr_makefile"
             fi
@@ -559,7 +560,7 @@ install_pbr_ctcc() {
         if [ -f "$pbr_makefile" ]; then
             if ! grep -q "pbr.user.ctcc" "$pbr_makefile"; then
                 echo "正在修改 PBR Makefile 添加 CTCC 安装规则..."
-                sed -i '/pbr.user.cmcc6.*\$(1)/a\
+                sed -i '/pbr\.user\.netflix.*\$(1)/a\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.ctcc $(1)/usr/share/pbr/pbr.user.ctcc\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.ctcc6 $(1)/usr/share/pbr/pbr.user.ctcc6' "$pbr_makefile"
             fi
@@ -571,11 +572,11 @@ install_pbr_ctcc() {
             echo "正在添加 PBR CTCC 配置条目..."
             sed -i "/option path '\/usr\/share\/pbr\/pbr.user.ctcc'/,/option enabled '0'/{
                 /option enabled '0'/a\\
- \\
+\\
 config include\\
 	option path '/usr/share/pbr/pbr.user.ctcc'\\
 	option enabled '0'\\
- \\
+\\
 config include\\
 	option path '/usr/share/pbr/pbr.user.ctcc6'\\
 	option enabled '0'
@@ -598,7 +599,7 @@ install_pbr_cucc() {
         if [ -f "$pbr_makefile" ]; then
             if ! grep -q "pbr.user.cucc" "$pbr_makefile"; then
                 echo "正在修改 PBR Makefile 添加 CUCC 安装规则..."
-                sed -i '/pbr.user.ctcc6.*\$(1)/a\
+                sed -i '/pbr\.user\.netflix.*\$(1)/a\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cucc $(1)/usr/share/pbr/pbr.user.cucc\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cucc6 $(1)/usr/share/pbr/pbr.user.cucc6' "$pbr_makefile"
             fi
@@ -610,11 +611,11 @@ install_pbr_cucc() {
             echo "正在添加 PBR CUCC 配置条目..."
             sed -i "/option path '\/usr\/share\/pbr\/pbr.user.cucc'/,/option enabled '0'/{
                 /option enabled '0'/a\\
- \\
+\\
 config include\\
 	option path '/usr/share/pbr/pbr.user.cucc'\\
 	option enabled '0'\\
- \\
+\\
 config include\\
 	option path '/usr/share/pbr/pbr.user.cucc6'\\
 	option enabled '0'
@@ -760,5 +761,29 @@ remove_tweaked_packages() {
         if grep -q "^DEFAULT_PACKAGES += \$(DEFAULT_PACKAGES.tweak)" "$target_mk"; then
             sed -i 's/DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/# DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/g' "$target_mk"
         fi
+    fi
+}
+
+change_hostname_to_awrt() {
+    # 修改主机名字，把 ImmortalWrt 修改成 AWRT
+    local cfg_path="$BUILD_DIR/package/base-files/files/bin/config_generate"
+    if [ -f "$cfg_path" ]; then
+        sed -i 's/ImmortalWrt/AWRT/g' "$cfg_path"
+    fi
+}
+
+enable_ttyd_autologin() {
+    # ttyd 自动登录
+    local ttyd_cfg="$BUILD_DIR/package/feeds/packages/ttyd/files/ttyd.config"
+    if [ -f "$ttyd_cfg" ]; then
+        sed -i 's|/bin/login|/usr/libexec/login.sh|g' "$ttyd_cfg"
+    fi
+}
+
+set_distrib_description() {
+    # 加入编译者信息 Alex Build
+    local release_file="$BUILD_DIR/package/base-files/files/etc/openwrt_release"
+    if [ -f "$release_file" ]; then
+        sed -i "s/DISTRIB_DESCRIPTION='[^']*'/DISTRIB_DESCRIPTION='Alex Build'/g" "$release_file"
     fi
 }
