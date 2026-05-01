@@ -787,3 +787,15 @@ set_distrib_description() {
         sed -i "s/DISTRIB_DESCRIPTION='[^']*'/DISTRIB_DESCRIPTION='Alex Build'/g" "$release_file"
     fi
 }
+
+fix_nikki_gobinpackage() {
+    # nikki 使用 GoBinPackage 但 install_src 需要 GoPackage 才能正确安装源码
+    # 修复方法：将 GoBinPackage 改为 GoPackage
+    local nikki_makefile="$BUILD_DIR/feeds/nikki/nikki/Makefile"
+    if [ -f "$nikki_makefile" ]; then
+        if grep -q '$(eval $(call GoBinPackage,nikki))' "$nikki_makefile"; then
+            sed -i 's/$(eval $(call GoBinPackage,nikki))/$(eval $(call GoPackage,nikki))/' "$nikki_makefile"
+            echo "已修复 nikki Makefile: GoBinPackage -> GoPackage"
+        fi
+    fi
+}
