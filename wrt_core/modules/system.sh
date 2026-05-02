@@ -789,13 +789,22 @@ set_distrib_description() {
 }
 
 fix_nikki_gobinpackage() {
-    # nikki 使用 GoBinPackage 但 install_src 需要 GoPackage 才能正确安装源码
-    # 修复方法：将 GoBinPackage 改为 GoPackage
+    # nikki 上游 Makefile 有两个问题：
+    # 1. Build/Compile 是空的，GoBinPackage 不会编译源码，导致 install_src 失败
+    # 2. GoBinPackage 改为 GoPackage 后，需要添加 $(call GoPackage/Compile) 来编译 mihomo 源码
+    # 注：nikki DEPENDS 中的 +mihomo 依赖由 nikki feed 的 mihomo-alpha（带 PROVIDES:=mihomo）满足，无需修改依赖名
     local nikki_makefile="$BUILD_DIR/feeds/nikki/nikki/Makefile"
     if [ -f "$nikki_makefile" ]; then
+        # 修复1：GoBinPackage -> GoPackage
         if grep -q '$(eval $(call GoBinPackage,nikki))' "$nikki_makefile"; then
             sed -i 's/$(eval $(call GoBinPackage,nikki))/$(eval $(call GoPackage,nikki))/' "$nikki_makefile"
             echo "已修复 nikki Makefile: GoBinPackage -> GoPackage"
+        fi
+
+        # 修复2：Build/Compile 为空，添加 GoPackage/Compile（需要 perl 多行替换）
+        if grep -q '^define Build/Compile[[:space:]]*$' "$nikki_makefile"; then
+            perl -i -0pe 's/define Build\/Compile\n\nendef/define Build\/Compile\n\n\$(call GoPackage\/Compile,\$(GO_PKG))\nendef/s' "$nikki_makefile"
+            echo "已修复 nikki Makefile: 添加 GoPackage/Compile"
         fi
     fi
 }

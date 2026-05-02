@@ -1169,14 +1169,6 @@ update_docker_stack() {
     _docker_stack_update_component "dockerd" "$dockerd_makefile" "releases" "$dockerd_version" "$dry_run" || return 1
     _docker_stack_update_dockerd_nftables_defaults "$build_dir" "$dry_run" "$storage_driver" || return 1
 
-    # # 确保 dockerd 被编译（awd.sh 只修改 Makefile，不向 .config 写入 CONFIG_PACKAGE_dockerd=y）
-    # if [ "$dry_run" = "0" ]; then
-    #     if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$build_dir/.config" 2>/dev/null; then
-    #         echo "CONFIG_PACKAGE_dockerd=y" >> "$build_dir/.config"
-    #         echo "已启用 CONFIG_PACKAGE_dockerd=y"
-    #     fi
-    # fi
-
     if [ "$dry_run" = "1" ]; then
         echo "dry-run 完成，未修改文件。"
     else
