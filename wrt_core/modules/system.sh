@@ -801,9 +801,22 @@ fix_nikki_gobinpackage() {
             echo "已修复 nikki Makefile: GoBinPackage -> GoPackage"
         fi
 
-        # 修复2：Build/Compile 为空，添加 GoPackage/Compile（需要 perl 多行替换）
+        # 修复2：Build/Compile 为空，添加 GoPackage/Compile
+        # 用 awk 直接处理，避免 sed 多行脚本的跨平台兼容问题
         if grep -q '^define Build/Compile[[:space:]]*$' "$nikki_makefile"; then
-            perl -i -0pe 's/define Build\/Compile\n\nendef/define Build\/Compile\n\n\$(call GoPackage\/Compile,\$(GO_PKG))\nendef/s' "$nikki_makefile"
+            awk '
+            /^define Build\/Compile$/ { in_block=1; print; next }
+            in_block && /^$/ { next }
+            in_block && /^endef$/ {
+                print ""
+                print "$(call GoPackage/Compile,$(GO_PKG))"
+                print ""
+                print "endef"
+                in_block=0
+                next
+            }
+            { print }
+            ' "$nikki_makefile" > "$nikki_makefile.tmp" && mv "$nikki_makefile.tmp" "$nikki_makefile"
             echo "已修复 nikki Makefile: 添加 GoPackage/Compile"
         fi
     fi
