@@ -282,14 +282,26 @@ apply_passwall_tweaks() {
 install_opkg_distfeeds() {
     local emortal_def_dir="$BUILD_DIR/package/emortal/default-settings"
     local distfeeds_conf="$emortal_def_dir/files/99-distfeeds.conf"
+    local ver_file="$BUILD_DIR/include/version.mk"
+    local config_file="$BUILD_DIR/.config"
+
+    # 从 version.mk 读取 VERSION_NUMBER（如 25.12-SNAPSHOT、24.10.6）
+    local version_number
+    version_number=$(grep -m1 "^VERSION_NUMBER:=" "$ver_file" | sed 's/.*:=//' | tr -d ' ')
+
+    # 从 .config 读取目标架构（仅两个选项：x86_64 或 aarch64_cortex-a53）
+    local arch="aarch64_cortex-a53"
+    if [ -f "$config_file" ] && grep -q "^CONFIG_TARGET_X86_64=y" "$config_file"; then
+        arch="x86_64"
+    fi
 
     if [ -d "$emortal_def_dir" ] && [ ! -f "$distfeeds_conf" ]; then
-        cat <<'EOF' >"$distfeeds_conf"
-src/gz openwrt_base https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/base/
-src/gz openwrt_luci https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/luci/
-src/gz openwrt_packages https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/packages/
-src/gz openwrt_routing https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/routing/
-src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/telephony/
+        cat >"$distfeeds_conf" <<EOF
+src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/base/
+src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/luci/
+src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/packages/
+src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/routing/
+src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/telephony/
 EOF
 
         sed -i "/define Package\/default-settings\/install/a\\
