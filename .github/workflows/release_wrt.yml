@@ -180,11 +180,17 @@ jobs:
           echo "  完成: $(du -h /tmp/build2025_package.tar.gz | cut -f1)"
 
           # ================================================================
-          # 正确打包 .config（用 tar，不是 cp）
+          # 正确打包 .config（用 find 找到后再 tar）
           # ================================================================
           echo "[4/5] 打包 .config ..."
-          tar -czf /tmp/build2025_config.tar.gz .config
-          echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
+          CONFIG_FILE=$(find . -maxdepth 2 -name ".config" -type f 2>/dev/null | head -1)
+          if [ -z "$CONFIG_FILE" ]; then
+            echo "  [跳过] .config：未找到"
+          else
+            echo "  找到 .config: $CONFIG_FILE"
+            tar -czf /tmp/build2025_config.tar.gz -C "$(dirname "$CONFIG_FILE")" "$(basename "$CONFIG_FILE")"
+            echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
+          fi
 
           # ================================================================
           # 上传到 Release Assets
