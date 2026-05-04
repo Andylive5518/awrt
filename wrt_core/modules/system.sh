@@ -193,6 +193,72 @@ update_tcping() {
     fi
 }
 
+fix_gettext_full_csharp() {
+    # gettext-full host 编译不需要 C# binding。openwrt-24.10 的 gettext 0.22.5
+    # 会进入 gettext-runtime/intl-csharp 并调用 csharpcomp.sh；CI 未安装 Mono 时会报：
+    # "C# compiler not found, try installing mono, then reconfigure"。
+    # 这里直接从 PKG_SUBDIRS 中移除 intl-csharp，并添加 --disable-csharp，避免依赖 Mono。
+    if [ "${REPO_BRANCH:-}" != "openwrt-24.10" ]; then
+        echo "当前分支不是 openwrt-24.10，跳过 gettext-full C# binding 修复: ${REPO_BRANCH:-unknown}"
+        return 0
+    fi
+
+    local gettext_mk="$BUILD_DIR/package/libs/gettext-full/Makefile"
+    local tmp_mk="/tmp/gettext-full-Makefile-$$.mk"
+
+    if [ ! -f "$gettext_mk" ]; then
+        echo "gettext-full Makefile 不存在，跳过 C# binding 修复: $gettext_mk"
+        return 0
+    fi
+
+    local add_disable_csharp=1
+    if grep -q -- '--disable-csharp' "$gettext_mk"; then
+        add_disable_csharp=0
+    fi
+
+    awk -v add_disable_csharp="$add_disable_csharp" '
+    /^[[:space:]]*intl-csharp[[:space:]]*\\[[:space:]]*$/ {
+        next
+    }
+
+    /^CONFIGURE_ARGS[[:space:]]*\+=/ {
+        in_configure = 1
+        in_host_configure = 0
+    }
+
+    /^HOST_CONFIGURE_ARGS[[:space:]]*\+=/ {
+        in_configure = 0
+        in_host_configure = 1
+    }
+
+    {
+        print
+
+        if (add_disable_csharp == 1 && in_configure && !configure_added && $0 ~ /^[[:space:]]*--disable-java[[:space:]]*\\[[:space:]]*$/) {
+            print "\t--disable-csharp \\"
+            configure_added = 1
+        }
+
+        if (add_disable_csharp == 1 && in_host_configure && !host_added && $0 ~ /^[[:space:]]*--disable-java[[:space:]]*\\[[:space:]]*$/) {
+            print "\t--disable-csharp \\"
+            host_added = 1
+        }
+
+        if ($0 !~ /\\[[:space:]]*$/) {
+            in_configure = 0
+            in_host_configure = 0
+        }
+    }
+    ' "$gettext_mk" > "$tmp_mk" && mv -f "$tmp_mk" "$gettext_mk"
+
+    if grep -q '^[[:space:]]*intl-csharp[[:space:]]*\\[[:space:]]*$' "$gettext_mk"; then
+        echo "错误：gettext-full Makefile 仍包含 intl-csharp，C# binding 修复失败" >&2
+        return 1
+    fi
+
+    echo "已修复 gettext-full: 禁用 intl-csharp/C# binding，避免依赖 Mono"
+}
+
 update_util_linux() {
     local util_linux_dir="$BUILD_DIR/package/utils/util-linux"
     local makefile_url="https://raw.githubusercontent.com/ZqinKing/immortalwrt/master/package/utils/util-linux/Makefile"
