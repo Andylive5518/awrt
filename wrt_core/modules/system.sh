@@ -391,7 +391,7 @@ update_nss_pbuf_performance() {
 set_build_signature() {
     local file="$BUILD_DIR/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js"
     if [ -d "$(dirname "$file")" ] && [ -f $file ]; then
-        sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ build by ZqinKing')/g" "$file"
+        sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ build by Alex')/g" "$file"
     fi
 }
 
@@ -858,14 +858,6 @@ enable_ttyd_autologin() {
     fi
 }
 
-set_distrib_description() {
-    # 加入编译者信息 Alex Build
-    local release_file="$BUILD_DIR/package/base-files/files/etc/openwrt_release"
-    if [ -f "$release_file" ]; then
-        sed -i "s/DISTRIB_DESCRIPTION='[^']*'/DISTRIB_DESCRIPTION='Alex Build'/g" "$release_file"
-    fi
-}
-
 fix_nikki_gobinpackage() {
     # nikki 上游 Makefile 使用 GoBinPackage，但 Build/Compile 是空的，
     # 导致 install_src 失败：找不到 .go_work/build/src/github.com/metacubex/mihomo
@@ -874,21 +866,25 @@ fix_nikki_gobinpackage() {
     # mihomo 二进制由 small8/mihomo（GoBinPackage，自带完整源码）提供。
     # nikki 的 +mihomo 依赖通过 small8/mihomo 的 PROVIDES:=mihomo 满足。
     #
-    # 修复方法：置空 Build/Compile 和 Build/InstallDev，禁用 nikki 自己的 Go 编译动作。
-    # 不做 GoBinPackage -> GoPackage 的转换（那个方案有路径不匹配问题）。
+    # 修复方法：
+    # 1. 置空 Build/Compile（禁用 nikki 自己的 Go 源码编译）
+    # 2. 在 golang-package.mk include 之后追加空的 Build/InstallDev 覆盖它
+    #
+    # 注意：Build/InstallDev 不在 nikki Makefile 里定义——它由 golang-package.mk
+    # 第 301 行全局挂载（ifneq ($(strip $(GO_PKG)),) ... Build/InstallDev=...），
+    # 所以不能通过在 nikki 文件内匹配 Build/InstallDev 来修复，
+    # 必须在 golang-package.mk include 之后追加空的 define Build/InstallDev/enef 来覆盖。
     local nikki_makefile="$BUILD_DIR/feeds/nikki/nikki/Makefile"
     if [ -f "$nikki_makefile" ]; then
-        # 置空 Build/Compile（原来就是空的，GoBinPackage 不会编译源码）
+        # 修复1：置空 Build/Compile（原来就是空的，GoBinPackage 不会编译源码）
         if grep -q '^define Build/Compile[[:space:]]*$' "$nikki_makefile"; then
             awk '
             /^define Build\/Compile$/ { in_block=1; print; next }
             in_block && /^$/ { blank_line=1; next }
             in_block && /^endef$/ {
                 if (blank_line) {
-                    # 已有空 endef 前导空行，直接输出 endef
                     print "endef"
                 } else {
-                    # 原来 Build/Compile 块有内容，补空行再 endef
                     print ""
                     print "endef"
                 }
@@ -901,17 +897,20 @@ fix_nikki_gobinpackage() {
             echo "已修复 nikki Makefile: Build/Compile 置空"
         fi
 
-        # 置空 Build/InstallDev（禁止 install_src 复制源码到 GO_BUILD_DIR）
-        # Build/InstallDev 由 golang-package.mk 挂载，会调用 install_src
-        # 这里用空定义覆盖，不执行任何源码安装操作
-        if grep -q 'Build/InstallDev.*GoPackage' "$nikki_makefile"; then
+        # 修复2：追加空的 Build/InstallDev，覆盖 golang-package.mk 的挂载
+        # Build/InstallDev 由 golang-package.mk 全局挂载（GO_PKG 不为空时），
+        # nikki Makefile 里没有这个定义，所以必须在 include 之后追加空定义来覆盖。
+        # 用 awk 追加到 $(eval $(call GoBinPackage,nikki)) 之前。
+        if ! grep -q '^define Build/InstallDev$' "$nikki_makefile"; then
             awk '
-            /^define Build\/InstallDev$/ { in_block=1; print; next }
-            in_block && /^endef$/ { print "endef"; in_block=0; next }
-            in_block { next }
+            /^\$\(eval \$\(call GoBinPackage,nikki\)\)/ {
+                print "define Build/InstallDev"
+                print "endef"
+                print ""
+            }
             { print }
             ' "$nikki_makefile" > "$nikki_makefile.tmp" && mv "$nikki_makefile.tmp" "$nikki_makefile"
-            echo "已修复 nikki Makefile: Build/InstallDev 置空"
+            echo "已修复 nikki Makefile: Build/InstallDev 置空（追加覆盖）"
         fi
     fi
 }
