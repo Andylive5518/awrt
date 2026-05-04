@@ -97,9 +97,25 @@ jobs:
 
       - name: Delete Old Cache
         run: |
+          # 重试函数：最多重试3次，间隔3秒
+          retry_delete() {
+            local key="$1"
+            local attempt=1
+            while [ $attempt -le 3 ]; do
+              if gh cache delete "$key" 2>&1; then
+                return 0
+              fi
+              echo "  [警告] gh cache delete \"$key\" 第${attempt}次失败，3秒后重试..."
+              sleep 3
+              attempt=$((attempt + 1))
+            done
+            echo "  [警告] gh cache delete \"$key\" 3次重试均失败，跳过"
+            return 0
+          }
+
           # 获取缓存列表并删除
           gh cache list --key ${{ matrix.os }}-${{ hashFiles('./repo_flag') }}- --json key --jq '.[] | .key' | while read -r key; do
-            gh cache delete "$key"
+            retry_delete "$key"
           done
           # 输出缓存状态
           echo "========cache status========"
