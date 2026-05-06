@@ -19,7 +19,7 @@ remove_unwanted_packages() {
     )
     local small8_packages=(
         "ppp" "firewall" "dae" "daed" "daed-next" "libnftnl" "nftables" "dnsmasq" "luci-app-alist"
-        "alist" "opkg" "smartdns" "luci-app-smartdns" "easytier"
+        "alist" "opkg" "smartdns" "tuic-client" "luci-app-smartdns" "easytier" "dockerd"
     )
 
     for pkg in "${luci_packages[@]}"; do
@@ -46,6 +46,12 @@ remove_unwanted_packages() {
     for pkg in "${small8_packages[@]}"; do
         if [[ -d ./feeds/small8/$pkg ]]; then
             \rm -rf ./feeds/small8/$pkg
+        fi
+    done
+
+    for pkg in mihomo-alpha mihomo-meta; do
+        if [[ -d ./feeds/nikki/$pkg ]]; then
+            \rm -rf ./feeds/nikki/$pkg
         fi
     done
 
