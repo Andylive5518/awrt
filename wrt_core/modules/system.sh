@@ -858,6 +858,39 @@ enable_ttyd_autologin() {
     fi
 }
 
+# 京东云 IPQ60xx: 固定使用 kernel 6.12
+# 原因: ath11k NSS 驱动 (nss.c) 使用了 kernel 6.16+ 已移除的 timer API (from_timer/del_timer_sync)
+#       kernel 6.12 + 满血 NSS 是已验证的稳定组合
+#       不关心上游当前是什么版本，京东云始终强制 6.12
+fix_jdcloud_kernel_version() {
+    local target_makefile="$BUILD_DIR/target/linux/qualcommax/Makefile"
+    if [ ! -f "$target_makefile" ]; then
+        return 0
+    fi
+
+    local current_ver
+    current_ver=$(grep -m1 '^KERNEL_PATCHVER:=' "$target_makefile" | sed 's/.*:=//' | tr -d ' ')
+
+    if [ "$current_ver" = "6.12" ]; then
+        return 0
+    fi
+
+    sed -i "s/^KERNEL_PATCHVER:=${current_ver}/KERNEL_PATCHVER:=6.12/" "$target_makefile"
+    echo "京东云: 内核版本从 ${current_ver} 回退到 6.12 (ath11k NSS timer API 兼容)"
+
+    # feeds.conf.default 中 nss_packages 源也需要回退到 6.12 兼容的 qosmio/nss-packages
+    # 匹配任何非 qosmio 的 nss-packages 源（如 VIKINGYFY/nss-packages-618 等）
+    local feeds_conf="$BUILD_DIR/feeds.conf.default"
+    if [ -f "$feeds_conf" ]; then
+        local nss_feed
+        nss_feed=$(grep -m1 'src-git nss_packages ' "$feeds_conf" | sed 's/.*src-git nss_packages //')
+        if [ -n "$nss_feed" ] && ! echo "$nss_feed" | grep -q 'qosmio/nss-packages.git'; then
+            sed -i "s|${nss_feed}|https://github.com/qosmio/nss-packages.git|" "$feeds_conf"
+            echo "京东云: nss_packages feed 从 ${nss_feed} 回退到 qosmio/nss-packages (kernel 6.12 兼容)"
+        fi
+    fi
+}
+
 fix_nikki_gobinpackage() {
     # nikki 上游 Makefile 使用 GoBinPackage，但 Build/Compile 是空的，
     # 导致 install_src 失败：找不到 .go_work/build/src/github.com/metacubex/mihomo
