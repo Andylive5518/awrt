@@ -49,11 +49,11 @@ remove_unwanted_packages() {
         fi
     done
 
-    for pkg in mihomo-alpha mihomo-meta; do
-        if [[ -d ./feeds/nikki/$pkg ]]; then
-            \rm -rf ./feeds/nikki/$pkg
-        fi
-    done
+    # for pkg in mihomo-alpha mihomo-meta; do
+    #     if [[ -d ./feeds/nikki/$pkg ]]; then
+    #         \rm -rf ./feeds/nikki/$pkg
+    #     fi
+    # done
 
     if [[ -d ./package/istore ]]; then
         \rm -rf ./package/istore
@@ -85,7 +85,7 @@ install_small8() {
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         tailscale luci-app-tailscale oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd \
-        luci-app-fullconenat luci-app-partexp luci-app-momo
+        luci-app-fullconenat luci-app-partexp luci-app-momo nikki luci-app-nikki
 }
 
 install_passwall() {
@@ -98,10 +98,10 @@ install_passwall2() {
     ./scripts/feeds install -p passwall2 -f luci-app-passwall2
 }
 
-install_nikki() {
-    echo "正在从官方仓库安装 nikki..."
-    ./scripts/feeds install -p nikki -f nikki luci-app-nikki
-}
+# install_nikki() {
+#     echo "正在从官方仓库安装 nikki..."
+#     ./scripts/feeds install -p nikki -f nikki luci-app-nikki
+# }
 
 install_fullconenat() {
     if [ ! -d $BUILD_DIR/package/network/utils/fullconenat-nft ]; then
