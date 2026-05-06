@@ -209,6 +209,14 @@ remove_uhttpd_dependency
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
 
+# 确保 dockerd 不被 defconfig 清除（small8 feed 索引残留导致 defconfig 误删）
+if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$BASE_PATH/../$BUILD_DIR/.config" 2>/dev/null; then
+    if [ -f "$BASE_PATH/../$BUILD_DIR/feeds/packages/utils/dockerd/Makefile" ]; then
+        echo "CONFIG_PACKAGE_dockerd=y" >> "$BASE_PATH/../$BUILD_DIR/.config"
+        echo "dockerd: Makefile 存在但 defconfig 未包含，已强制添加到 .config"
+    fi
+fi
+
 if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
     DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
     if [ -d "${DISTFEEDS_PATH%/*}" ] && [ -f "$DISTFEEDS_PATH" ]; then

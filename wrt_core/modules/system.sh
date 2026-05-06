@@ -867,50 +867,62 @@ fix_nikki_gobinpackage() {
     # nikki 的 +mihomo 依赖通过 small8/mihomo 的 PROVIDES:=mihomo 满足。
     #
     # 修复方法：
-    # 1. 置空 Build/Compile（禁用 nikki 自己的 Go 源码编译）
-    # 2. 在 golang-package.mk include 之后追加空的 Build/InstallDev 覆盖它
+    # 1. GoBinPackage -> GoPackage，在空的 Build/Compile 中添加 GoPackage/Compile
+    # 2. 在 $(eval ...) 之前追加空的 Build/InstallDev，覆盖 golang-package.mk 的全局挂载
     #
     # 注意：Build/InstallDev 不在 nikki Makefile 里定义——它由 golang-package.mk
     # 第 301 行全局挂载（ifneq ($(strip $(GO_PKG)),) ... Build/InstallDev=...），
     # 所以不能通过在 nikki 文件内匹配 Build/InstallDev 来修复，
     # 必须在 golang-package.mk include 之后追加空的 define Build/InstallDev/enef 来覆盖。
-    local nikki_makefile="$BUILD_DIR/feeds/nikki/nikki/Makefile"
-    if [ -f "$nikki_makefile" ]; then
-        # 修复1：置空 Build/Compile（原来就是空的，GoBinPackage 不会编译源码）
-        if grep -q '^define Build/Compile[[:space:]]*$' "$nikki_makefile"; then
+    # 通用路径查找：nikki 可能来自 nikki 官方 feed (feeds/nikki/nikki/)
+    # 或 small8 feed (feeds/small8/nikki/)，取决于 feeds.conf 配置
+    local nikki_makefile
+    nikki_makefile=$(find "$BUILD_DIR/feeds" -maxdepth 4 -path '*/nikki/Makefile' -type f 2>/dev/null | head -1)
+    if [ -n "$nikki_makefile" ] && [ -f "$nikki_makefile" ]; then
+        local fixed=0
+
+        # 修复1：GoBinPackage -> GoPackage + 在空的 Build/Compile 中加入 GoPackage/Compile
+        # 用单次 awk 完成两项替换，避免多次读写
+        if grep -q '$(eval $(call GoBinPackage,nikki))' "$nikki_makefile"; then
             awk '
-            /^define Build\/Compile$/ { in_block=1; print; next }
-            in_block && /^$/ { blank_line=1; next }
+            BEGIN { in_block = 0 }
+            # 检测空的 Build/Compile 块（define 后直接跟着 endef，中间只有空行）
+            /^define Build\/Compile[[:space:]]*$/ { in_block = 1; print; next }
+            in_block && /^[[:space:]]*$/ { next }
             in_block && /^endef$/ {
-                if (blank_line) {
-                    print "endef"
-                } else {
-                    print ""
-                    print "endef"
-                }
-                in_block=0; blank_line=0
+                print "\t$(call GoPackage/Compile,$(GO_PKG))"
+                print "endef"
+                in_block = 0
                 next
             }
-            in_block && blank_line && /^[^[:space:]]/ { blank_line=0 }
-            { if (in_block) blank_line=0; print }
+            # GoBinPackage -> GoPackage
+            /\$\(eval \$\(call GoBinPackage,nikki\)\)/ {
+                gsub(/GoBinPackage/, "GoPackage")
+                print
+                next
+            }
+            { print }
             ' "$nikki_makefile" > "$nikki_makefile.tmp" && mv "$nikki_makefile.tmp" "$nikki_makefile"
-            echo "已修复 nikki Makefile: Build/Compile 置空"
+            echo "[nikki] GoBinPackage -> GoPackage + Build/Compile 添加 GoPackage/Compile"
+            fixed=1
         fi
 
         # 修复2：追加空的 Build/InstallDev，覆盖 golang-package.mk 的挂载
         # Build/InstallDev 由 golang-package.mk 全局挂载（GO_PKG 不为空时），
         # nikki Makefile 里没有这个定义，所以必须在 include 之后追加空定义来覆盖。
-        # 用 awk 追加到 $(eval $(call GoBinPackage,nikki)) 之前。
+        # 修复1 已将 GoBinPackage -> GoPackage，所以这里匹配 GoPackage。
         if ! grep -q '^define Build/InstallDev$' "$nikki_makefile"; then
             awk '
-            /^\$\(eval \$\(call GoBinPackage,nikki\)\)/ {
+            /^\$\(eval \$\(call GoPackage,nikki\)\)/ {
                 print "define Build/InstallDev"
                 print "endef"
                 print ""
             }
             { print }
             ' "$nikki_makefile" > "$nikki_makefile.tmp" && mv "$nikki_makefile.tmp" "$nikki_makefile"
-            echo "已修复 nikki Makefile: Build/InstallDev 置空（追加覆盖）"
+            echo "[nikki] Build/InstallDev 置空（覆盖 golang-package.mk 全局挂载）"
         fi
+
+        [ "$fixed" = "1" ] && echo "[nikki] Makefile 双重修复完成"
     fi
 }
