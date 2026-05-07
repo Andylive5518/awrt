@@ -876,6 +876,11 @@ fix_jdcloud_kernel_version() {
     fi
 
     sed -i "s/^KERNEL_PATCHVER:=${current_ver}/KERNEL_PATCHVER:=6.12/" "$target_makefile"
+    if ! grep -q '^KERNEL_PATCHVER:=6.12$' "$target_makefile"; then
+        echo "错误：内核版本 sed 未生效，当前值：" >&2
+        grep 'KERNEL_PATCHVER' "$target_makefile" >&2
+        exit 1
+    fi
     echo "京东云: 内核版本从 ${current_ver} 回退到 6.12 (ath11k NSS timer API 兼容)"
 
     # feeds.conf.default 中 nss_packages 源也需要回退到 6.12 兼容的 qosmio/nss-packages
@@ -886,6 +891,11 @@ fix_jdcloud_kernel_version() {
         nss_feed=$(grep -m1 'src-git nss_packages ' "$feeds_conf" | sed 's/.*src-git nss_packages //')
         if [ -n "$nss_feed" ] && ! echo "$nss_feed" | grep -q 'qosmio/nss-packages.git'; then
             sed -i "s|${nss_feed}|https://github.com/qosmio/nss-packages.git|" "$feeds_conf"
+            if ! grep -q 'qosmio/nss-packages.git' "$feeds_conf"; then
+                echo "错误：nss_packages feed sed 未生效" >&2
+                grep 'src-git nss_packages' "$feeds_conf" >&2
+                exit 1
+            fi
             echo "京东云: nss_packages feed 从 ${nss_feed} 回退到 qosmio/nss-packages (kernel 6.12 兼容)"
         fi
     fi

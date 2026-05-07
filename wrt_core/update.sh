@@ -40,8 +40,8 @@ source "$SCRIPT_DIR/modules/docker.sh"
 main() {
     clone_repo
     clean_up
-    fix_jdcloud_kernel_version
     reset_feeds_conf
+    fix_jdcloud_kernel_version
     update_feeds
     remove_unwanted_packages
     remove_tweaked_packages
