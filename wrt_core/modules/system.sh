@@ -900,16 +900,30 @@ fix_jdcloud_kernel_version() {
         fi
     fi
 
-    # kernel 6.12 降级时 config-6.12 缺少 CONFIG_ARM64_4K_PAGES=y
+    # kernel 6.12 降级时 config-6.12 缺少某些 ARM64 choice 默认选项
     # 会导致 syncconfig 交互式提示 "choice[1-3?]" → CI 环境无人应答 → Error 1
     # 参考: OpenWrt issue #19652, conf.c syncconfig 对 (NEW) choice 无法自动选择默认值
+    # ARM64_4K_PAGES: page size choice 默认值，config-6.12 只有 16K/64K 的 is not set
+    # ARM64_VA_BITS_39: VA 地址空间 choice 默认值 (ARM64_4K_PAGES 修复后会级联触发)
     local config_6_12="$BUILD_DIR/target/linux/generic/config-6.12"
-    if [ -f "$config_6_12" ] && ! grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12"; then
-        echo "CONFIG_ARM64_4K_PAGES=y" >> "$config_6_12"
-        if grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12"; then
-            echo "京东云: config-6.12 已添加 CONFIG_ARM64_4K_PAGES=y (防止 syncconfig 交互提示)"
+    if [ -f "$config_6_12" ]; then
+        local added=0
+        if ! grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12"; then
+            echo "CONFIG_ARM64_4K_PAGES=y" >> "$config_6_12"
+            added=1
+        fi
+        if ! grep -q '^CONFIG_ARM64_VA_BITS_39=y$' "$config_6_12"; then
+            echo "CONFIG_ARM64_VA_BITS_39=y" >> "$config_6_12"
+            added=2
+        fi
+        if grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12" && \
+           grep -q '^CONFIG_ARM64_VA_BITS_39=y$' "$config_6_12"; then
+            if [ "$added" -gt 0 ]; then
+                echo "京东云: config-6.12 已添加 CONFIG_ARM64_4K_PAGES=y + CONFIG_ARM64_VA_BITS_39=y (防止 syncconfig 交互提示)"
+            fi
         else
-            echo "错误：未能添加 CONFIG_ARM64_4K_PAGES=y 到 config-6.12" >&2
+            echo "错误：未能添加 ARM64 config 条目到 config-6.12" >&2
+            grep -E 'ARM64_4K_PAGES|ARM64_VA_BITS_39' "$config_6_12" >&2
             exit 1
         fi
     fi
