@@ -271,14 +271,12 @@ update_util_linux() {
 
     echo "正在更新 util-linux..."
 
-    # 下载 ZqinKing 的 Makefile 到临时文件
     if ! curl -fsSL -o "$tmp_makefile" "$makefile_url"; then
         echo "错误：从 $makefile_url 下载 util-linux Makefile 失败" >&2
         rm -f "$tmp_makefile"
         return 1
     fi
 
-    # 校验版本：必须是 2.41.1 才使用
     local ver
     ver=$(grep -m1 "^PKG_VERSION" "$tmp_makefile" 2>/dev/null | sed 's/.*:=//' | tr -d ' ')
     if [ "$ver" != "2.41.1" ]; then
@@ -288,10 +286,8 @@ update_util_linux() {
         exit 1
     fi
 
-    # 版本正确，应用更新
     mv -f "$tmp_makefile" "$util_linux_dir/Makefile"
 
-    # 下载 patches 目录（如果存在）
     local patches_dir="$util_linux_dir/patches"
     if [ -d "$patches_dir" ]; then
         local zqin_patches_url="https://api.github.com/repos/ZqinKing/immortalwrt/contents/package/utils/util-linux/patches?ref=master"
@@ -371,12 +367,39 @@ src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_nu
 EOF
 
         sed -i "/define Package\/default-settings\/install/a\\
-\\t\$(INSTALL_DIR) \$(1)/etc\\n\
+\t\$(INSTALL_DIR) \$(1)/etc\\
 \t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" $emortal_def_dir/Makefile
 
         sed -i "/exit 0/i\\
-[ -f \'/etc/99-distfeeds.conf\' ] && mv \'/etc/99-distfeeds.conf\' \'/etc/opkg/distfeeds.conf\'\n\
-sed -ri \'/check_signature/s@^[^#]@#&@\' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+[ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
+sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+    fi
+
+    # 修复 ImmortalWrt build system 生成的 distfeeds 模板中未展开的变量
+    # ImmortalWrt 的 distfeeds.conf 是由 build system 动态生成的，
+    # 模板里 $(call qstrip,$(CONFIG_VERSION_NUMBER)) 在某些构建路径下不会被展开
+    # 直接 find + sed 暴力替换，确保无论模板在哪都会被修复
+    if [ -n "$version_number" ]; then
+        local fixed=0
+        while IFS= read -r -d '' f; do
+            sed -i "s|\$(call qstrip,\$(CONFIG_VERSION_NUMBER))|${version_number}|g" "$f"
+            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
+            fixed=1
+        done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" \
+            -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
+            -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
+
+        if [ "$fixed" = "1" ]; then
+            echo "[opkg] distfeeds 模板已修复：${version_number} (arch: ${arch})"
+        fi
+    fi
+
+    # 修复 99-default-settings-chinese 中的 opkg/apk mirror 默认值
+    # 该文件没有扩展名，上面的 find *.conf|*.mk|*.sh 匹配不到
+    local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
+    if [ -f "$chn_settings" ]; then
+        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://mirrors.ustc.edu.cn/immortalwrt|g' "$chn_settings"
+        echo "[mirror] 99-default-settings-chinese 镜像已改为 USTC"
     fi
 }
 
@@ -413,6 +436,19 @@ update_menu_location() {
     if [ -d "$(dirname "$tailscale_path")" ] && [ -f "$tailscale_path" ]; then
         sed -i 's/services/vpn/g' "$tailscale_path"
     fi
+
+    # 将代理类应用从"服务"移到"VPN"菜单
+    local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
+    local feed_dir
+    for feed_dir in "$BUILD_DIR/feeds/"*/; do
+        local app
+        for app in $proxy_apps; do
+            local menu_dir="$feed_dir/luci-app-$app/root/usr/share/luci/menu.d"
+            if [ -d "$menu_dir" ]; then
+                find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
+            fi
+        done
+    done
 }
 
 fix_compile_coremark() {
@@ -483,16 +519,33 @@ update_oaf_deconfig() {
     local uci_def="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0"
     local disable_path="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/99_disable_oaf"
 
+    # 检测目标平台
+    local is_x86=0
+    if [ -f "$BUILD_DIR/.config" ] && grep -q "^CONFIG_TARGET_x86_64=y" "$BUILD_DIR/.config"; then
+        is_x86=1
+    fi
+
     if [ -d "${conf_path%/*}" ] && [ -f "$conf_path" ]; then
         sed -i \
             -e "s/record_enable '1'/record_enable '0'/g" \
             -e "s/disable_hnat '1'/disable_hnat '0'/g" \
-            -e "s/auto_load_engine '1'/auto_load_engine '0'/g" \
             "$conf_path"
+
+        # x86 平台: 保持 auto_load_engine='1'（自动加载驱动）
+        # ARM/IPQ60xx: 设为 '0'（NSS 冲突，不自动加载）
+        if [ "$is_x86" = "0" ]; then
+            sed -i "s/auto_load_engine '1'/auto_load_engine '0'/g" "$conf_path"
+        fi
     fi
 
     if [ -d "${uci_def%/*}" ] && [ -f "$uci_def" ]; then
-        sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
+        # x86: 保留 auto_load_engine，只删 disable_hnat
+        # ARM: 删除 auto_load_engine 和 disable_hnat
+        if [ "$is_x86" = "1" ]; then
+            sed -i '/disable_hnat/d' "$uci_def"
+        else
+            sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
+        fi
 
         cat >"$disable_path" <<-EOF
 #!/bin/sh
@@ -598,7 +651,6 @@ install_pbr_cmcc() {
         if [ -f "$pbr_makefile" ]; then
             if ! grep -q "pbr.user.cmcc" "$pbr_makefile"; then
                 echo "正在修改 PBR Makefile 添加 CMCC 安装规则..."
-                # 原版 Makefile install 块以 pbr.user.netflix 为最后一行，以此为锚点追加
                 sed -i '/pbr\.user\.netflix.*\$(1)/a\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc $(1)/usr/share/pbr/pbr.user.cmcc\
 	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc6 $(1)/usr/share/pbr/pbr.user.cmcc6' "$pbr_makefile"
@@ -609,7 +661,7 @@ install_pbr_cmcc() {
     if [ -f "$pbr_conf" ]; then
         if ! grep -q "pbr.user.cmcc" "$pbr_conf"; then
             echo "正在添加 PBR CMCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.cmcc'/,/option enabled '0'/{
+            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
                 /option enabled '0'/a\\
 \\
 config include\\
@@ -648,7 +700,7 @@ install_pbr_ctcc() {
     if [ -f "$pbr_conf" ]; then
         if ! grep -q "pbr.user.ctcc" "$pbr_conf"; then
             echo "正在添加 PBR CTCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.ctcc'/,/option enabled '0'/{
+            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
                 /option enabled '0'/a\\
 \\
 config include\\
@@ -687,7 +739,7 @@ install_pbr_cucc() {
     if [ -f "$pbr_conf" ]; then
         if ! grep -q "pbr.user.cucc" "$pbr_conf"; then
             echo "正在添加 PBR CUCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.cucc'/,/option enabled '0'/{
+            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
                 /option enabled '0'/a\\
 \\
 config include\\
@@ -716,22 +768,17 @@ fix_pbr_ip_forward() {
         return 1
     fi
 
-    # Check if fix is already applied (enabled check already present)
     if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$pbr_init_script"; then
         echo "PBR IP Forward fix already applied"
         return 0
     fi
 
-    # Check if the original pattern exists that needs fixing
     if ! grep -q '\[ -n "$strict_enforcement" \] && \[ "$(cat /proc/sys/net/ipv4/ip_forward)"' "$pbr_init_script"; then
         echo "PBR IP Forward: 未找到需要修复的代码，可能上游已修复或此版本无此问题"
         return 0
     fi
 
     echo "正在应用 PBR IP Forward 修复..."
-    # Fix: Add enabled check before strict_enforcement check
-    # Original: if [ -n "$strict_enforcement" ] && [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "0" ]; then
-    # Fixed:   if [ -n "$enabled" ] && [ -n "$strict_enforcement" ] && [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "0" ]; then
     sed -i 's/\[ -n "\$strict_enforcement" \] && \[ "\$(cat \/proc\/sys\/net\/ipv4\/ip_forward)"/\[ -n "\$enabled" \] \&\& \[ -n "\$strict_enforcement" \] \&\& \[ "\$(cat \/proc\/sys\/net\/ipv4\/ip_forward)"/' "$pbr_init_script"
     
     if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$pbr_init_script"; then
@@ -843,7 +890,6 @@ remove_tweaked_packages() {
 }
 
 change_hostname_to_awrt() {
-    # 修改主机名字，把 ImmortalWrt 修改成 AWRT
     local cfg_path="$BUILD_DIR/package/base-files/files/bin/config_generate"
     if [ -f "$cfg_path" ]; then
         sed -i 's/ImmortalWrt/AWRT/g' "$cfg_path"
@@ -851,10 +897,11 @@ change_hostname_to_awrt() {
 }
 
 enable_ttyd_autologin() {
-    # ttyd 自动登录
     local ttyd_cfg="$BUILD_DIR/package/feeds/packages/ttyd/files/ttyd.config"
     if [ -f "$ttyd_cfg" ]; then
         sed -i 's|/bin/login|/usr/libexec/login.sh|g' "$ttyd_cfg"
+        sed -i '/option interface/d' "$ttyd_cfg"
+        echo "[ttyd] 自动登录 + 监听所有接口"
     fi
 }
 
@@ -995,5 +1042,13 @@ fix_nikki_gobinpackage() {
         fi
 
         [ "$fixed" = "1" ] && echo "[nikki] Makefile 双重修复完成"
+    fi
+}
+
+fix_bandix_default_enabled() {
+    local bandix_config="$BUILD_DIR/feeds/openwrt_bandix/openwrt-bandix/files/bandix.config"
+    if [ -f "$bandix_config" ]; then
+        sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
+        echo "[bandix] traffic/connections/dns 默认已启用"
     fi
 }

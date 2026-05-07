@@ -374,6 +374,17 @@ update_dockerman() {
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
         fi
 
+        # 替换 registry_mirrors 预设值为国内加速站
+        local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
+        if [ -f "$cfg_lua" ]; then
+            sed -i '/hub-mirror\.c\.163\.com/d' "$cfg_lua"
+            sed -i "/o = s:option(DynamicList, \"registry_mirrors\"/a\\
+\to:value(\"https://docker.1ms.run\", \"https://docker.1ms.run\")\\
+\to:value(\"https://docker.xuanyuan.me\", \"https://docker.xuanyuan.me\")\\
+\to:value(\"https://docker.m.daocloud.io\", \"https://docker.m.daocloud.io\")" "$cfg_lua"
+            echo "dockerman registry_mirrors 预设值已更换为国内加速站"
+        fi
+
         echo "dockerman 更新完成"
     fi
 }

@@ -87,6 +87,7 @@ main() {
     update_nginx_ubus_module
     check_default_settings
     install_opkg_distfeeds
+    fix_bandix_default_enabled
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency

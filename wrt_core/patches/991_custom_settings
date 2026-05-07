@@ -11,9 +11,20 @@ if [ "$current_value" -lt 65535 ]; then
     sysctl -p
 fi
 
-# 解除dropbear访问限制
+# 解除dropbear接口绑定，让SSH监听所有接口(0.0.0.0)
+changed=0
+
+if uci get dropbear.@dropbear[0].Interface >/dev/null 2>&1; then
+    uci delete dropbear.@dropbear[0].Interface
+    changed=1
+fi
+
 if uci show dropbear | grep -q "DirectInterface"; then
     uci delete dropbear.main.DirectInterface
+    changed=1
+fi
+
+if [ "$changed" -eq 1 ]; then
     uci commit dropbear
     /etc/init.d/dropbear restart
 fi

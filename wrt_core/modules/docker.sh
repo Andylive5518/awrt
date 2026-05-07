@@ -986,6 +986,17 @@ _docker_stack_update_dockerd_nftables_defaults() {
     if [ -n "$storage_driver" ]; then
         _docker_stack_set_or_append_dockerd_uci_option "$dockerd_config" "storage_driver" "$storage_driver" || return 1
     fi
+
+    # 替换 registry_mirrors 为更稳定的国内加速站
+    if [ -f "$dockerd_config" ]; then
+        sed -i '/list registry_mirrors/d' "$dockerd_config"
+        sed -i "/^config globals 'globals'/a\\
+\tlist registry_mirrors 'https://docker.1ms.run'\\
+\tlist registry_mirrors 'https://docker.xuanyuan.me'\\
+\tlist registry_mirrors 'https://docker.m.daocloud.io'" "$dockerd_config"
+        echo "dockerd registry_mirrors 已设为国内加速站"
+    fi
+
     _docker_stack_fix_dockerd_nftables_comment "$dockerd_config"
     echo "dockerd nftables 默认策略已应用。"
 
