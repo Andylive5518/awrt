@@ -899,6 +899,20 @@ fix_jdcloud_kernel_version() {
             echo "京东云: nss_packages feed 从 ${nss_feed} 回退到 qosmio/nss-packages (kernel 6.12 兼容)"
         fi
     fi
+
+    # kernel 6.12 降级时 config-6.12 缺少 CONFIG_ARM64_4K_PAGES=y
+    # 会导致 syncconfig 交互式提示 "choice[1-3?]" → CI 环境无人应答 → Error 1
+    # 参考: OpenWrt issue #19652, conf.c syncconfig 对 (NEW) choice 无法自动选择默认值
+    local config_6_12="$BUILD_DIR/target/linux/generic/config-6.12"
+    if [ -f "$config_6_12" ] && ! grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12"; then
+        echo "CONFIG_ARM64_4K_PAGES=y" >> "$config_6_12"
+        if grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12"; then
+            echo "京东云: config-6.12 已添加 CONFIG_ARM64_4K_PAGES=y (防止 syncconfig 交互提示)"
+        else
+            echo "错误：未能添加 CONFIG_ARM64_4K_PAGES=y 到 config-6.12" >&2
+            exit 1
+        fi
+    fi
 }
 
 fix_nikki_gobinpackage() {
