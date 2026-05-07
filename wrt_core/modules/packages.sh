@@ -374,7 +374,6 @@ update_dockerman() {
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
         fi
 
-        # 替换 registry_mirrors 预设值为国内加速站
         local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
         if [ -f "$cfg_lua" ]; then
             sed -i '/hub-mirror\.c\.163\.com/d' "$cfg_lua"

@@ -15,7 +15,6 @@ REPO_BRANCH=$2
 BUILD_DIR=$3
 COMMIT_HASH=$4
 
-# Convert BUILD_DIR to absolute path
 if [[ "$BUILD_DIR" != /* ]]; then
     BUILD_DIR="$(pwd)/$BUILD_DIR"
 fi
@@ -51,7 +50,6 @@ main() {
     update_golang
     change_dnsmasq2full
     fix_mk_def_depends
-
     update_default_lan_addr
     remove_something_nss_kmod
     update_affinity_script
@@ -104,7 +102,6 @@ main() {
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
-    change_hostname_to_awrt
     enable_ttyd_autologin
     fix_nikki_gobinpackage
     fix_pbr_ip_forward

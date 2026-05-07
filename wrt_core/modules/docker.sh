@@ -987,7 +987,6 @@ _docker_stack_update_dockerd_nftables_defaults() {
         _docker_stack_set_or_append_dockerd_uci_option "$dockerd_config" "storage_driver" "$storage_driver" || return 1
     fi
 
-    # 替换 registry_mirrors 为更稳定的国内加速站
     if [ -f "$dockerd_config" ]; then
         sed -i '/list registry_mirrors/d' "$dockerd_config"
         sed -i "/^config globals 'globals'/a\\

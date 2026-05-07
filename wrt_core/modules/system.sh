@@ -449,6 +449,34 @@ update_menu_location() {
             fi
         done
     done
+
+    # PBR (策略路由) 移到"网络"菜单
+    for feed_dir in "$BUILD_DIR/feeds/"*/; do
+        local pbr_menu_dir="$feed_dir/luci-app-pbr/root/usr/share/luci/menu.d"
+        if [ -d "$pbr_menu_dir" ]; then
+            find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+        fi
+    done
+
+    # WOL (网络唤醒) 移到"网络"菜单
+    for feed_dir in "$BUILD_DIR/feeds/"*/; do
+        local wol_menu_dir="$feed_dir/luci-app-wol/root/usr/share/luci/menu.d"
+        if [ -d "$wol_menu_dir" ]; then
+            find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+        fi
+    done
+
+    # Bandix 移到"状态"菜单，排在 WireGuard 上面
+    local bandix_menu_dir="$BUILD_DIR/feeds/luci_app_bandix/luci-app-bandix/root/usr/share/luci/menu.d"
+    if [ -d "$bandix_menu_dir" ]; then
+        find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
+            -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
+        # WireGuard 在状态菜单的 order 通常是 4，bandix 设 3 排在它上面
+        local bandix_json="$bandix_menu_dir/luci-app-bandix.json"
+        if [ -f "$bandix_json" ]; then
+            sed -i 's/"order": 90/"order": 3/' "$bandix_json"
+        fi
+    fi
 }
 
 fix_compile_coremark() {
@@ -886,13 +914,6 @@ remove_tweaked_packages() {
         if grep -q "^DEFAULT_PACKAGES += \$(DEFAULT_PACKAGES.tweak)" "$target_mk"; then
             sed -i 's/DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/# DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/g' "$target_mk"
         fi
-    fi
-}
-
-change_hostname_to_awrt() {
-    local cfg_path="$BUILD_DIR/package/base-files/files/bin/config_generate"
-    if [ -f "$cfg_path" ]; then
-        sed -i 's/ImmortalWrt/AWRT/g' "$cfg_path"
     fi
 }
 
