@@ -665,6 +665,35 @@ fix_opkg_check() {
     fi
 }
 
+fix_netfilter_kmod_clash() {
+    local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
+
+    if [ ! -f "$netfilter_mk" ]; then
+        echo "Netfilter makefile not found: $netfilter_mk" >&2
+        return 1
+    fi
+
+    if grep -q 'DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables' "$netfilter_mk"; then
+        echo "Netfilter kmod clash workaround already applied"
+        return 0
+    fi
+
+    if grep -q 'DEPENDS:=+!LINUX_6_12:kmod-iptables' "$netfilter_mk"; then
+        echo "Applying netfilter kmod clash workaround for Linux 6.12/6.18..."
+        sed -i 's/DEPENDS:=+!LINUX_6_12:kmod-iptables/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/' "$netfilter_mk"
+        return 0
+    fi
+
+    if grep -q 'DEPENDS:=+(!LINUX_6_12&&!LINUX_6_18):kmod-iptables' "$netfilter_mk"; then
+        echo "Normalizing netfilter kmod clash workaround expression..."
+        sed -i 's/DEPENDS:=+(!LINUX_6_12\&\&!LINUX_6_18):kmod-iptables/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/' "$netfilter_mk"
+        return 0
+    fi
+
+    echo "Netfilter kmod clash workaround target not found in $netfilter_mk" >&2
+    return 1
+}
+
 install_pbr_cmcc() {
     local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
     local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
@@ -923,98 +952,6 @@ enable_ttyd_autologin() {
         sed -i 's|/bin/login|/usr/libexec/login.sh|g' "$ttyd_cfg"
         sed -i '/option interface/d' "$ttyd_cfg"
         echo "[ttyd] 自动登录 + 监听所有接口"
-    fi
-}
-
-# 京东云 IPQ60xx: 固定使用 kernel 6.12
-# 原因: ath11k NSS 驱动 (nss.c) 使用了 kernel 6.16+ 已移除的 timer API (from_timer/del_timer_sync)
-#       kernel 6.12 + 满血 NSS 是已验证的稳定组合
-#       不关心上游当前是什么版本，京东云始终强制 6.12
-fix_jdcloud_kernel_version() {
-    local target_makefile="$BUILD_DIR/target/linux/qualcommax/Makefile"
-    if [ ! -f "$target_makefile" ]; then
-        return 0
-    fi
-
-    local current_ver
-    current_ver=$(grep -m1 '^KERNEL_PATCHVER:=' "$target_makefile" | sed 's/.*:=//' | tr -d ' ')
-
-    if [ "$current_ver" = "6.12" ]; then
-        return 0
-    fi
-
-    sed -i "s/^KERNEL_PATCHVER:=${current_ver}/KERNEL_PATCHVER:=6.12/" "$target_makefile"
-    if ! grep -q '^KERNEL_PATCHVER:=6.12$' "$target_makefile"; then
-        echo "错误：内核版本 sed 未生效，当前值：" >&2
-        grep 'KERNEL_PATCHVER' "$target_makefile" >&2
-        exit 1
-    fi
-    echo "京东云: 内核版本从 ${current_ver} 回退到 6.12 (ath11k NSS timer API 兼容)"
-
-    # feeds.conf.default 中 nss_packages 源也需要回退到 6.12 兼容的 qosmio/nss-packages
-    # 匹配任何非 qosmio 的 nss-packages 源（如 VIKINGYFY/nss-packages-618 等）
-    local feeds_conf="$BUILD_DIR/feeds.conf.default"
-    if [ -f "$feeds_conf" ]; then
-        local nss_feed
-        nss_feed=$(grep -m1 'src-git nss_packages ' "$feeds_conf" | sed 's/.*src-git nss_packages //')
-        if [ -n "$nss_feed" ] && ! echo "$nss_feed" | grep -q 'qosmio/nss-packages.git'; then
-            sed -i "s|${nss_feed}|https://github.com/qosmio/nss-packages.git|" "$feeds_conf"
-            if ! grep -q 'qosmio/nss-packages.git' "$feeds_conf"; then
-                echo "错误：nss_packages feed sed 未生效" >&2
-                grep 'src-git nss_packages' "$feeds_conf" >&2
-                exit 1
-            fi
-            echo "京东云: nss_packages feed 从 ${nss_feed} 回退到 qosmio/nss-packages (kernel 6.12 兼容)"
-        fi
-    fi
-
-    # kernel 6.12 降级时 config-6.12 缺少某些 ARM64 choice 默认选项
-    # 会导致 syncconfig 交互式提示 "choice[1-3?]" → CI 环境无人应答 → Error 1
-    # 参考: OpenWrt issue #19652, conf.c syncconfig 对 (NEW) choice 无法自动选择默认值
-    #
-    # 缺失选项分为两级：
-    #   L1 (6.12 基础): ARM64_4K_PAGES, ARM64_VA_BITS_39 — 最初发现的，已导致上次失败
-    #   L2 (6.12.85 新增): ARM64_PA_BITS_48, CPU_LITTLE_ENDIAN, SCHED_MC/CLUSTER/SMT, NR_CPUS
-    #     6.12.85 引入 ARM64_PA_BITS_48 → 触发 Kernel Features 全部重问 → stdin 管道应答耗尽
-    #     注意: CPU_BIG_ENDIAN 是 choice 默认(=1)，不设 CPU_LITTLE_ENDIAN 会生成大端内核 → 无法启动
-    local config_6_12="$BUILD_DIR/target/linux/generic/config-6.12"
-    if [ -f "$config_6_12" ]; then
-        local added=0
-
-        _append_if_missing() {
-            local pattern="$1" value="$2"
-            if ! grep -q "^${pattern}$" "$config_6_12" 2>/dev/null; then
-                echo "$value" >> "$config_6_12"
-                added=1
-            fi
-        }
-
-        # L1: page size + VA bits (6.12 基础)
-        _append_if_missing 'CONFIG_ARM64_4K_PAGES=y'     'CONFIG_ARM64_4K_PAGES=y'
-        _append_if_missing 'CONFIG_ARM64_VA_BITS_39=y'   'CONFIG_ARM64_VA_BITS_39=y'
-
-        # L2: 6.12.85 新增选项（ARM64_4K_PAGES 修复后级联触发 Kernel Features 重问）
-        _append_if_missing 'CONFIG_ARM64_PA_BITS_48=y'   'CONFIG_ARM64_PA_BITS_48=y'
-        _append_if_missing 'CONFIG_CPU_LITTLE_ENDIAN=y'  'CONFIG_CPU_LITTLE_ENDIAN=y'
-        _append_if_missing '# CONFIG_SCHED_MC is not set'     '# CONFIG_SCHED_MC is not set'
-        _append_if_missing '# CONFIG_SCHED_CLUSTER is not set' '# CONFIG_SCHED_CLUSTER is not set'
-        _append_if_missing '# CONFIG_SCHED_SMT is not set'    '# CONFIG_SCHED_SMT is not set'
-        _append_if_missing 'CONFIG_NR_CPUS=4'             'CONFIG_NR_CPUS=4'
-
-        # 验证修复完整性（L1 + L2 关键项）
-        local missing=""
-        for opt in CONFIG_ARM64_4K_PAGES=y CONFIG_ARM64_VA_BITS_39=y \
-                   CONFIG_ARM64_PA_BITS_48=y CONFIG_CPU_LITTLE_ENDIAN=y; do
-            grep -q "^${opt}$" "$config_6_12" || missing="$missing $opt"
-        done
-        if [ -n "$missing" ]; then
-            echo "错误：未能添加 ARM64 config 条目到 config-6.12:$missing" >&2
-            exit 1
-        fi
-
-        if [ "$added" -gt 0 ]; then
-            echo "京东云: config-6.12 已补全 ARM64 选项 (4K_PAGES+VA_BITS_39+PA_BITS_48+LITTLE_ENDIAN+调度器+NR_CPUS)"
-        fi
     fi
 }
 

@@ -40,7 +40,6 @@ main() {
     clone_repo
     clean_up
     reset_feeds_conf
-    fix_jdcloud_kernel_version
     update_feeds
     remove_unwanted_packages
     remove_tweaked_packages
@@ -90,7 +89,7 @@ main() {
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
-    update_docker_stack
+    docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_cups_libcups_avahi_depends
     fix_easytier_lua
     update_adguardhome
@@ -98,6 +97,7 @@ main() {
     update_geoip
     fix_openssl_ktls
     fix_opkg_check
+    fix_netfilter_kmod_clash
     fix_quectel_cm
     install_pbr_cmcc
     install_pbr_ctcc
