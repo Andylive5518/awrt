@@ -25,7 +25,7 @@ GOLANG_BRANCH="26.x"
 THEME_SET="argon"
 LAN_ADDR="192.168.168.1"
 
-SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 BASE_PATH=${BASE_PATH:-$SCRIPT_DIR}
 
 source "$SCRIPT_DIR/modules/general.sh"
@@ -57,7 +57,7 @@ main() {
     change_cpuusage
     update_tcping
     fix_gettext_full_csharp
-    [ "$1" = "x64_immwrt" ] && update_util_linux
+    [ -f "$BUILD_DIR/.config" ] && grep -q "^CONFIG_TARGET_x86_64=y" "$BUILD_DIR/.config" && update_util_linux
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks

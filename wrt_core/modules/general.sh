@@ -24,7 +24,7 @@ clean_up() {
         \rm -rf "tmp"
     fi
     if [[ -d "logs" ]]; then
-        \rm -rf "logs/*"
+        \rm -rf logs/*
     fi
     if [[ -d "feeds" ]]; then
         ./scripts/feeds clean

@@ -452,9 +452,9 @@ update_package() {
     fi
     local mk_path="$dir/Makefile"
     if [ -f "$mk_path" ]; then
-        local PKG_REPO=$(grep -oE "^PKG_GIT_URL.*github.com(/[-_a-zA-Z0-9]{1,}){2}" "$mk_path" | awk -F"/" '{print $(NF - 1) "/" $NF}')
+        local PKG_REPO=$(grep -oE "^PKG_GIT_URL.*github.com(/[-_a-zA-Z0-9]{1,}){2}" "$mk_path" | awk -F"/" '{print $(NF - 1) "/" $NF}' | sed 's/\.git$//')
         if [ -z "$PKG_REPO" ]; then
-            PKG_REPO=$(grep -oE "^PKG_SOURCE_URL.*github.com(/[-_a-zA-Z0-9]{1,}){2}" "$mk_path" | awk -F"/" '{print $(NF - 1) "/" $NF}')
+            PKG_REPO=$(grep -oE "^PKG_SOURCE_URL.*github.com(/[-_a-zA-Z0-9]{1,}){2}" "$mk_path" | awk -F"/" '{print $(NF - 1) "/" $NF}' | sed 's/\.git$//')
             if [ -z "$PKG_REPO" ]; then
                 echo "错误：无法从 $mk_path 提取 PKG_REPO" >&2
                 return 1
@@ -524,8 +524,8 @@ update_package() {
         PKG_SOURCE=${PKG_SOURCE//\$\(PKG_VERSION\)/$PKG_VER}
 
         local PKG_HASH
-        if ! PKG_HASH=$(curl -fsSL "$PKG_SOURCE_URL""$PKG_SOURCE" | sha256sum | cut -b -64); then
-            echo "错误：从 $PKG_SOURCE_URL$PKG_SOURCE 获取软件包哈希失败" >&2
+        if ! PKG_HASH=$(curl -fsSL "${PKG_SOURCE_URL%/}/${PKG_SOURCE#/}" | sha256sum | cut -b -64); then
+            echo "错误：从 ${PKG_SOURCE_URL%/}/${PKG_SOURCE#/} 获取软件包哈希失败" >&2
             return 1
         fi
 

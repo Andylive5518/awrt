@@ -45,5 +45,5 @@ git clone --depth 1 -b $REPO_BRANCH $REPO_URL $BUILD_DIR
 PROJECT_MIRRORS_FILE="$BUILD_DIR/scripts/projectsmirrors.json"
 
 if [ -f "$PROJECT_MIRRORS_FILE" ]; then
-    sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
+    sed -i '/\.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
 fi

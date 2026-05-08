@@ -98,7 +98,7 @@ fi
 $cmd $flags | awk -v count=0 -v cmd=$cmd '
   /kmod-qca|^nss/ {
   if(count>0) tab="            "
-  print tab (cmd == "/bin/opkg" ? $0 : $1)
+  print tab (cmd ~ /opkg/ ? $0 : $1)
   count++
   }
   END {

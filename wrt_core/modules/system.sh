@@ -48,8 +48,8 @@ fix_kconfig_recursive_dependency() {
 
 update_default_lan_addr() {
     local CFG_PATH="$BUILD_DIR/package/base-files/files/bin/config_generate"
-    if [ -f $CFG_PATH ]; then
-        sed -i 's/192\.168\.[0-9]*\.[0-9]*/'$LAN_ADDR'/g' $CFG_PATH
+    if [ -f "$CFG_PATH" ]; then
+        sed -i "s/192\.168\.[0-9]*\.[0-9]*/${LAN_ADDR}/g" "$CFG_PATH"
     fi
 }
 
@@ -291,8 +291,7 @@ update_util_linux() {
     local patches_dir="$util_linux_dir/patches"
     if [ -d "$patches_dir" ]; then
         local zqin_patches_url="https://api.github.com/repos/ZqinKing/immortalwrt/contents/package/utils/util-linux/patches?ref=master"
-        local patches_json
-        if patches_json=$(curl -fsSL "$zqin_patches_url" 2>/dev/null); then
+        if curl -fsSL "$zqin_patches_url" >/dev/null 2>&1; then
             echo "正在更新 util-linux patches..."
             find "$patches_dir" -maxdepth 1 -type f -name "[0-9][0-9][0-9]-*.patch" -exec rm -f {} \; 2>/dev/null || true
         fi
