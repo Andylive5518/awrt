@@ -194,20 +194,22 @@ update_tcping() {
 }
 
 fix_gettext_full_csharp() {
-    # gettext-full host 编译不需要 C# binding。openwrt-24.10 的 gettext 0.22.5
+    # gettext-full host 编译不需要 C# binding。部分版本的 gettext
     # 会进入 gettext-runtime/intl-csharp 并调用 csharpcomp.sh；CI 未安装 Mono 时会报：
     # "C# compiler not found, try installing mono, then reconfigure"。
     # 这里直接从 PKG_SUBDIRS 中移除 intl-csharp，并添加 --disable-csharp，避免依赖 Mono。
-    if [ "${REPO_BRANCH:-}" != "openwrt-24.10" ]; then
-        echo "当前分支不是 openwrt-24.10，跳过 gettext-full C# binding 修复: ${REPO_BRANCH:-unknown}"
-        return 0
-    fi
+    # 不硬编码分支名，改为检测 Makefile 是否实际包含 intl-csharp。
 
     local gettext_mk="$BUILD_DIR/package/libs/gettext-full/Makefile"
     local tmp_mk="/tmp/gettext-full-Makefile-$$.mk"
 
     if [ ! -f "$gettext_mk" ]; then
         echo "gettext-full Makefile 不存在，跳过 C# binding 修复: $gettext_mk"
+        return 0
+    fi
+
+    if ! grep -q '^[[:space:]]*intl-csharp[[:space:]]*\\[[:space:]]*$' "$gettext_mk"; then
+        echo "gettext-full Makefile 不含 intl-csharp，无需修复"
         return 0
     fi
 
@@ -346,11 +348,9 @@ install_opkg_distfeeds() {
     local ver_file="$BUILD_DIR/include/version.mk"
     local config_file="$BUILD_DIR/.config"
 
-    # 从 version.mk 读取 VERSION_NUMBER（如 25.12-SNAPSHOT、24.10.6）
     local version_number
     version_number=$(grep -m1 "^VERSION_NUMBER:=" "$ver_file" | sed 's/.*:=//' | tr -d ' ')
 
-    # 从 .config 读取目标架构（仅两个选项：x86_64 或 aarch64_cortex-a53）
     local arch="aarch64_cortex-a53"
     if [ -f "$config_file" ] && grep -q "^CONFIG_TARGET_X86_64=y" "$config_file"; then
         arch="x86_64"
@@ -558,16 +558,12 @@ update_oaf_deconfig() {
             -e "s/disable_hnat '1'/disable_hnat '0'/g" \
             "$conf_path"
 
-        # x86 平台: 保持 auto_load_engine='1'（自动加载驱动）
-        # ARM/IPQ60xx: 设为 '0'（NSS 冲突，不自动加载）
         if [ "$is_x86" = "0" ]; then
             sed -i "s/auto_load_engine '1'/auto_load_engine '0'/g" "$conf_path"
         fi
     fi
 
     if [ -d "${uci_def%/*}" ] && [ -f "$uci_def" ]; then
-        # x86: 保留 auto_load_engine，只删 disable_hnat
-        # ARM: 删除 auto_load_engine 和 disable_hnat
         if [ "$is_x86" = "1" ]; then
             sed -i '/disable_hnat/d' "$uci_def"
         else

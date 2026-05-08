@@ -104,11 +104,15 @@ _docker_stack_update_dockerd_depends_block() {
             in_depends = 0
             replaced = 0
         }
-        /^[[:space:]]*DEPENDS:=\$\(ARCH_DEPENDS\) \\$/ {
+        /^[[:space:]]*DEPENDS:=\$\((GO_)?ARCH_DEPENDS\) \\$/ {
             in_depends = 1
             replaced = 1
+            has_go = ($0 ~ /GO_ARCH_DEPENDS/)
 
-            print "  DEPENDS:=$(ARCH_DEPENDS) \\"
+            if (has_go)
+                print "  DEPENDS:=$(GO_ARCH_DEPENDS) \\"
+            else
+                print "  DEPENDS:=$(ARCH_DEPENDS) \\"
             print "  +ca-certificates \\"
             print "  +containerd \\"
             print "  +iptables-nft \\"
