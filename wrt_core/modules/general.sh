@@ -34,9 +34,20 @@ clean_up() {
 }
 
 reset_feeds_conf() {
-    git reset --hard origin/$REPO_BRANCH
-    git clean -f -d
-    git pull
+    if git rev-parse --verify "origin/$REPO_BRANCH" >/dev/null 2>&1; then
+        # REPO_BRANCH 是分支名
+        git reset --hard "origin/$REPO_BRANCH"
+        git clean -f -d
+        git pull
+    elif git rev-parse --verify "$REPO_BRANCH" >/dev/null 2>&1; then
+        # REPO_BRANCH 是 tag 名
+        git checkout "$REPO_BRANCH"
+        git clean -f -d
+        # tag 是固定快照，不需要 pull
+    else
+        echo "错误：无法解析 $REPO_BRANCH 为分支或标签" >&2
+        exit 1
+    fi
     if [[ $COMMIT_HASH != "none" ]]; then
         git checkout $COMMIT_HASH
     fi
