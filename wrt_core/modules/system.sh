@@ -971,28 +971,49 @@ fix_jdcloud_kernel_version() {
     # kernel 6.12 降级时 config-6.12 缺少某些 ARM64 choice 默认选项
     # 会导致 syncconfig 交互式提示 "choice[1-3?]" → CI 环境无人应答 → Error 1
     # 参考: OpenWrt issue #19652, conf.c syncconfig 对 (NEW) choice 无法自动选择默认值
-    # ARM64_4K_PAGES: page size choice 默认值，config-6.12 只有 16K/64K 的 is not set
-    # ARM64_VA_BITS_39: VA 地址空间 choice 默认值 (ARM64_4K_PAGES 修复后会级联触发)
+    #
+    # 缺失选项分为两级：
+    #   L1 (6.12 基础): ARM64_4K_PAGES, ARM64_VA_BITS_39 — 最初发现的，已导致上次失败
+    #   L2 (6.12.85 新增): ARM64_PA_BITS_48, CPU_LITTLE_ENDIAN, SCHED_MC/CLUSTER/SMT, NR_CPUS
+    #     6.12.85 引入 ARM64_PA_BITS_48 → 触发 Kernel Features 全部重问 → stdin 管道应答耗尽
+    #     注意: CPU_BIG_ENDIAN 是 choice 默认(=1)，不设 CPU_LITTLE_ENDIAN 会生成大端内核 → 无法启动
     local config_6_12="$BUILD_DIR/target/linux/generic/config-6.12"
     if [ -f "$config_6_12" ]; then
         local added=0
-        if ! grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12"; then
-            echo "CONFIG_ARM64_4K_PAGES=y" >> "$config_6_12"
-            added=1
-        fi
-        if ! grep -q '^CONFIG_ARM64_VA_BITS_39=y$' "$config_6_12"; then
-            echo "CONFIG_ARM64_VA_BITS_39=y" >> "$config_6_12"
-            added=2
-        fi
-        if grep -q '^CONFIG_ARM64_4K_PAGES=y$' "$config_6_12" && \
-           grep -q '^CONFIG_ARM64_VA_BITS_39=y$' "$config_6_12"; then
-            if [ "$added" -gt 0 ]; then
-                echo "京东云: config-6.12 已添加 CONFIG_ARM64_4K_PAGES=y + CONFIG_ARM64_VA_BITS_39=y (防止 syncconfig 交互提示)"
+
+        _append_if_missing() {
+            local pattern="$1" value="$2"
+            if ! grep -q "^${pattern}$" "$config_6_12" 2>/dev/null; then
+                echo "$value" >> "$config_6_12"
+                added=1
             fi
-        else
-            echo "错误：未能添加 ARM64 config 条目到 config-6.12" >&2
-            grep -E 'ARM64_4K_PAGES|ARM64_VA_BITS_39' "$config_6_12" >&2
+        }
+
+        # L1: page size + VA bits (6.12 基础)
+        _append_if_missing 'CONFIG_ARM64_4K_PAGES=y'     'CONFIG_ARM64_4K_PAGES=y'
+        _append_if_missing 'CONFIG_ARM64_VA_BITS_39=y'   'CONFIG_ARM64_VA_BITS_39=y'
+
+        # L2: 6.12.85 新增选项（ARM64_4K_PAGES 修复后级联触发 Kernel Features 重问）
+        _append_if_missing 'CONFIG_ARM64_PA_BITS_48=y'   'CONFIG_ARM64_PA_BITS_48=y'
+        _append_if_missing 'CONFIG_CPU_LITTLE_ENDIAN=y'  'CONFIG_CPU_LITTLE_ENDIAN=y'
+        _append_if_missing '# CONFIG_SCHED_MC is not set'     '# CONFIG_SCHED_MC is not set'
+        _append_if_missing '# CONFIG_SCHED_CLUSTER is not set' '# CONFIG_SCHED_CLUSTER is not set'
+        _append_if_missing '# CONFIG_SCHED_SMT is not set'    '# CONFIG_SCHED_SMT is not set'
+        _append_if_missing 'CONFIG_NR_CPUS=4'             'CONFIG_NR_CPUS=4'
+
+        # 验证修复完整性（L1 + L2 关键项）
+        local missing=""
+        for opt in CONFIG_ARM64_4K_PAGES=y CONFIG_ARM64_VA_BITS_39=y \
+                   CONFIG_ARM64_PA_BITS_48=y CONFIG_CPU_LITTLE_ENDIAN=y; do
+            grep -q "^${opt}$" "$config_6_12" || missing="$missing $opt"
+        done
+        if [ -n "$missing" ]; then
+            echo "错误：未能添加 ARM64 config 条目到 config-6.12:$missing" >&2
             exit 1
+        fi
+
+        if [ "$added" -gt 0 ]; then
+            echo "京东云: config-6.12 已补全 ARM64 选项 (4K_PAGES+VA_BITS_39+PA_BITS_48+LITTLE_ENDIAN+调度器+NR_CPUS)"
         fi
     fi
 }
