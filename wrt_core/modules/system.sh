@@ -685,6 +685,13 @@ fix_netfilter_kmod_clash() {
         return 0
     fi
 
+    # kernel 6.6 (openwrt-24.10) 不存在 kmod-iptables 版本门控，
+    # iptables/nf_tables 共存无冲突，无需 workaround
+    if ! grep -q 'kmod-iptables' "$netfilter_mk"; then
+        echo "Netfilter kmod clash workaround not applicable (no kmod-iptables gate found)"
+        return 0
+    fi
+
     echo "Netfilter kmod clash workaround target not found in $netfilter_mk" >&2
     return 1
 }
