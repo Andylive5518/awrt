@@ -201,7 +201,7 @@ if [[ -d action_build ]]; then
     BUILD_DIR="action_build"
 fi
 
-"$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH"
+"$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH" "$CONFIG_FILE"
 
 apply_config
 remove_uhttpd_dependency
@@ -234,8 +234,7 @@ if [[ -d $TARGET_DIR ]]; then
 fi
 
 make download -j$(($(nproc) * 2))
-# make -j$(($(nproc) + 1)) || make -j1 V=s
-make -j1 V=s
+make -j$(($(nproc) + 1)) || make -j1 V=s
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"

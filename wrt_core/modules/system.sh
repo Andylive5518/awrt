@@ -1033,3 +1033,22 @@ fix_bandix_default_enabled() {
         echo "[bandix] traffic/connections/dns 默认已启用"
     fi
 }
+
+fix_tuic_x86_downgrade() {
+    # x86_64 使用 ImmortalWrt 24.10.6 (非最新版)，Rust 版本为 1.90 stable。
+    # small8 feed 的 tuic-client v1.8.1 在 commit 6db2478 引入了 if-let guard 语法
+    # (Rust 1.95.0 才 stable)，无法用 Rust 1.90 编译。
+    # v1.8.0 不包含此提交，可正常编译。此处将版本号回退到 1.8.0。
+    # 京东云等其他平台不受影响。
+    if ! grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE" 2>/dev/null; then
+        return 0
+    fi
+
+    local tuic_mk="$BUILD_DIR/feeds/small8/tuic-client/Makefile"
+    [ -f "$tuic_mk" ] || return 0
+
+    if grep -q "PKG_VERSION:=1.8.1" "$tuic_mk"; then
+        sed -i 's/PKG_VERSION:=1.8.1/PKG_VERSION:=1.8.0/' "$tuic_mk"
+        echo "[tuic-client] x86_64: downgraded v1.8.1 → v1.8.0 (avoid if-let guard on Rust 1.90)"
+    fi
+}
