@@ -209,6 +209,8 @@ remove_uhttpd_dependency
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
 
+# kernel 6.18+ 禁用 legacy iptables kmod（见 system.sh fix_legacy_iptables_kmod）
+
 # 确保 dockerd 不被 defconfig 清除（small8 feed 索引残留导致 defconfig 误删）
 if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$BASE_PATH/../$BUILD_DIR/.config" 2>/dev/null; then
     if [ -f "$BASE_PATH/../$BUILD_DIR/feeds/packages/utils/dockerd/Makefile" ]; then
