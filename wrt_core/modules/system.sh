@@ -1036,9 +1036,11 @@ fix_bandix_default_enabled() {
 
 fix_tuic_x86_downgrade() {
     # x86_64 使用 ImmortalWrt 24.10.6 (非最新版)，Rust 版本为 1.90 stable。
-    # small8 feed 的 tuic-client v1.8.1 在 commit 6db2478 引入了 if-let guard 语法
-    # (Rust 1.95.0 才 stable)，无法用 Rust 1.90 编译。
-    # v1.8.0 不包含此提交，可正常编译。此处将版本号回退到 1.8.0。
+    # small8 feed 的 tuic-client v1.8.0 在 release notes 中明确写了：
+    #   "Replaced manual match guards with Rust 1.95.0 if-let guards"
+    # v1.8.1 同样包含此特性（仅修复了日志双前缀 bug）。
+    # 因此 v1.8.0 和 v1.8.1 都需要 Rust >= 1.92 (nightly) / >= 1.95 (stable)。
+    # v1.7.2 不包含 if-let guard，可正常编译。此处将版本号回退到 1.7.2。
     # 京东云等其他平台不受影响。
     if ! grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE" 2>/dev/null; then
         return 0
@@ -1048,7 +1050,7 @@ fix_tuic_x86_downgrade() {
     [ -f "$tuic_mk" ] || return 0
 
     if grep -q "PKG_VERSION:=1.8.1" "$tuic_mk"; then
-        sed -i 's/PKG_VERSION:=1.8.1/PKG_VERSION:=1.8.0/' "$tuic_mk"
-        echo "[tuic-client] x86_64: downgraded v1.8.1 → v1.8.0 (avoid if-let guard on Rust 1.90)"
+        sed -i 's/PKG_VERSION:=1.8.1/PKG_VERSION:=1.7.2/' "$tuic_mk"
+        echo "[tuic-client] x86_64: downgraded v1.8.1 → v1.7.2 (v1.8.0 also has if-let guard, Rust 1.90)"
     fi
 }
