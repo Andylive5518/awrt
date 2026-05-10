@@ -29,12 +29,9 @@ LAN_ADDR="192.168.168.1"
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 BASE_PATH=${BASE_PATH:-$SCRIPT_DIR}
 
-source "$SCRIPT_DIR/modules/general.sh"
-source "$SCRIPT_DIR/modules/feeds.sh"
-source "$SCRIPT_DIR/modules/packages.sh"
-source "$SCRIPT_DIR/modules/system.sh"
-source "$SCRIPT_DIR/modules/cups.sh"
-source "$SCRIPT_DIR/modules/docker.sh"
+for module in "$SCRIPT_DIR/modules/"*.sh; do
+    source "$module"
+done
 
 
 main() {
