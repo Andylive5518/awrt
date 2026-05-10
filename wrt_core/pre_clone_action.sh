@@ -14,7 +14,17 @@ BASE_PATH=$(cd "$WRT_CORE_PATH" && pwd)
 
 Dev=$1
 
-INI_FILE="$BASE_PATH/compilecfg/$Dev.ini"
+# 无参数时自动检测唯一的 INI 文件
+if [[ -z $Dev ]]; then
+    INI_FILE=$(ls "$BASE_PATH/compilecfg/"*.ini 2>/dev/null | head -1)
+    if [[ -z $INI_FILE ]]; then
+        echo "No INI file found in $BASE_PATH/compilecfg/"
+        exit 1
+    fi
+    Dev=$(basename "$INI_FILE" .ini)
+else
+    INI_FILE="$BASE_PATH/compilecfg/$Dev.ini"
+fi
 
 if [[ ! -f $INI_FILE ]]; then
     echo "INI file not found: $INI_FILE"
