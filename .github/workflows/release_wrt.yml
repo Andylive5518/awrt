@@ -35,10 +35,13 @@ jobs:
           sudo -E timedatectl set-timezone "Asia/Shanghai"
           export BUILD_DATE=$(TZ=UTC+8 date +"%y.%m.%d_%H.%M.%S")
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          echo "BUILD_SRC=https://github.com/VIKINGYFY/immortalwrt.git (main)" >> $GITHUB_ENV
+          INI_FILE=$(ls wrt_core/compilecfg/*.ini | head -1)
+          REPO_URL=$(awk -F"=" '/^REPO_URL=/ {print $2}' "$INI_FILE")
+          REPO_BRANCH=$(awk -F"=" '/^REPO_BRANCH=/ {print $2}' "$INI_FILE")
+          echo "BUILD_SRC=${REPO_URL} (${REPO_BRANCH})" >> $GITHUB_ENV
 
       - name: Pre Clone
-        run: ./wrt_core/pre_clone_action.sh jdcloud_ipq60xx_immwrt
+        run: ./wrt_core/pre_clone_action.sh
 
       - name: Cache Dependencies
         uses: actions/cache@v5.0.2
