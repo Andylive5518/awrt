@@ -39,6 +39,8 @@ jobs:
           REPO_URL=$(awk -F"=" '/^REPO_URL=/ {print $2}' "$INI_FILE")
           REPO_BRANCH=$(awk -F"=" '/^REPO_BRANCH=/ {print $2}' "$INI_FILE")
           echo "BUILD_SRC=${REPO_URL} (${REPO_BRANCH})" >> $GITHUB_ENV
+          CONFIG_NAME=$(basename "$INI_FILE" .ini)
+          echo "CONFIG_NAME=$CONFIG_NAME" >> $GITHUB_ENV
 
       - name: Pre Clone
         run: ./wrt_core/pre_clone_action.sh
@@ -187,7 +189,7 @@ jobs:
             echo "  找到生成后的 .config: $CONFIG_FILE"
             cp -f "$CONFIG_FILE" "$CONFIG_TMP_DIR/.config"
           else
-            SEED_CONFIG="${GITHUB_WORKSPACE}/wrt_core/deconfig/jdcloud_ipq60xx_immwrt.config"
+            SEED_CONFIG="${GITHUB_WORKSPACE}/wrt_core/deconfig/${{ env.CONFIG_NAME }}.config"
             echo "  [提示] action_build/.config 未找到，构建可能在 make defconfig 前失败"
             if [ -f "$SEED_CONFIG" ]; then
               echo "  使用源配置回退: $SEED_CONFIG"
@@ -195,13 +197,12 @@ jobs:
               {
                 echo "generated .config was not found."
                 echo "The build likely failed before apply_config/make defconfig."
-                echo "Fallback .config source: wrt_core/deconfig/jdcloud_ipq60xx_immwrt.config"
+                echo "Fallback .config source: wrt_core/deconfig/${{ env.CONFIG_NAME }}.config"
               } > "$CONFIG_TMP_DIR/README.txt"
 
-              for frag in nss.config compile_base.config docker_deps.config proxy.config; do
-                if [ -f "${GITHUB_WORKSPACE}/wrt_core/deconfig/$frag" ]; then
-                  cp -f "${GITHUB_WORKSPACE}/wrt_core/deconfig/$frag" "$CONFIG_TMP_DIR/$frag"
-                fi
+              for frag in "${GITHUB_WORKSPACE}/wrt_core/deconfig/"*.config; do
+                [ "$frag" = "$SEED_CONFIG" ] && continue
+                cp -f "$frag" "$CONFIG_TMP_DIR/$(basename "$frag")"
               done
             else
               echo "  [跳过] .config 和源配置均未找到: $SEED_CONFIG"
