@@ -1,19 +1,8 @@
-name: Release WRT
-run-name: Release - ${{ inputs.model }}
+name: Release WRT (JD Cloud IPQ60xx)
+run-name: Release - JD Cloud IPQ60xx
 
 on:
   workflow_dispatch:
-    inputs:
-      model:
-        required: true
-        description: Device Model
-        type: choice
-        default: jdcloud_ipq60xx_immwrt
-        options:
-          - jdcloud_ipq60xx_immwrt
-          - jdcloud_ipq60xx_libwrt
-          - n1_immwrt
-          - x64_immwrt
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,11 +35,10 @@ jobs:
           sudo -E timedatectl set-timezone "Asia/Shanghai"
           export BUILD_DATE=$(TZ=UTC+8 date +"%y.%m.%d_%H.%M.%S")
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          export BUILD_SRC=$(awk -F"=" '/REPO_URL/ {print $NF}' "./wrt_core/compilecfg/${{ inputs.model }}.ini")
-          echo "BUILD_SRC=$BUILD_SRC" >> $GITHUB_ENV
+          echo "BUILD_SRC=https://github.com/VIKINGYFY/immortalwrt.git (main)" >> $GITHUB_ENV
 
       - name: Pre Clone
-        run: ./wrt_core/pre_clone_action.sh ${{ inputs.model }}
+        run: ./wrt_core/pre_clone_action.sh jdcloud_ipq60xx_immwrt
 
       - name: Cache Dependencies
         uses: actions/cache@v5.0.2
@@ -98,13 +86,12 @@ jobs:
           echo "=================================================="
 
       - name: Build Firmware
-        run: ./build.sh ${{ inputs.model }}
+        run: ./build.sh
 
       - name: Upload Debug to Release
         if: always()
         env:
           UPLOAD_REPO: Andylive5518/make_tmp
-          # 必须用 PAT，不能用当前仓库的 GITHUB_TOKEN（无法跨仓库写）
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           OPENWRT_PATH: ${{ github.workspace }}/action_build
         run: |
@@ -119,9 +106,6 @@ jobs:
 
           cd "${OPENWRT_PATH}"
 
-          # ================================================================
-          # 创建 Release（或复用已存在的同名 tag）
-          # ================================================================
           echo "[1/5] 创建 Release ..."
 
           release_id=""
@@ -142,7 +126,7 @@ jobs:
               -H "Content-Type: application/json" \
               -d "$(printf '{"tag_name":"%s","name":"%s","prerelease":true}' \
                 "${RELEASE_TAG}" \
-                "Debug ${RELEASE_TAG} (run ${{ github.run_number }} @ ${{ inputs.model }})")" \
+                "Debug ${RELEASE_TAG} (run ${{ github.run_number }} @ jdcloud_ipq60xx)")" \
               "https://api.github.com/repos/${UPLOAD_REPO}/releases")
 
             release_id=$(echo "$post_resp" | grep '"id":' | head -1 | sed 's/.*"id": *//;s/,.*//')
@@ -155,9 +139,6 @@ jobs:
             echo "  Release 创建成功，ID=${release_id}"
           fi
 
-          # ================================================================
-          # 打包 feeds/ 和 package/（排除 .git、源码包、编译缓存）
-          # ================================================================
           echo "[2/5] 打包 feeds/（排除下载的源码包）..."
           mkdir -p build2025
           rsync -a \
@@ -179,13 +160,6 @@ jobs:
           tar -czf "/tmp/build2025_package.tar.gz" -C . build2025/package/
           echo "  完成: $(du -h /tmp/build2025_package.tar.gz | cut -f1)"
 
-          # ================================================================
-          # 打包 .config
-          # - 正常构建：上传 action_build/.config
-          # - 早期失败（update.sh / feeds / docker patch 阶段）：.config 可能还没生成，
-          #   回退上传 wrt_core/deconfig/${{ inputs.model }}.config 作为 .config，
-          #   并附带参与合并的配置片段，方便排查。
-          # ================================================================
           echo "[4/5] 打包 .config ..."
           CONFIG_TMP_DIR="/tmp/build2025_config"
           rm -rf "$CONFIG_TMP_DIR"
@@ -210,7 +184,7 @@ jobs:
             echo "  找到生成后的 .config: $CONFIG_FILE"
             cp -f "$CONFIG_FILE" "$CONFIG_TMP_DIR/.config"
           else
-            SEED_CONFIG="${GITHUB_WORKSPACE}/wrt_core/deconfig/${{ inputs.model }}.config"
+            SEED_CONFIG="${GITHUB_WORKSPACE}/wrt_core/deconfig/jdcloud_ipq60xx_immwrt.config"
             echo "  [提示] action_build/.config 未找到，构建可能在 make defconfig 前失败"
             if [ -f "$SEED_CONFIG" ]; then
               echo "  使用源配置回退: $SEED_CONFIG"
@@ -218,10 +192,10 @@ jobs:
               {
                 echo "generated .config was not found."
                 echo "The build likely failed before apply_config/make defconfig."
-                echo "Fallback .config source: wrt_core/deconfig/${{ inputs.model }}.config"
+                echo "Fallback .config source: wrt_core/deconfig/jdcloud_ipq60xx_immwrt.config"
               } > "$CONFIG_TMP_DIR/README.txt"
 
-              for frag in compile_base.config docker_deps.config proxy.config nss.config; do
+              for frag in nss.config compile_base.config docker_deps.config proxy.config; do
                 if [ -f "${GITHUB_WORKSPACE}/wrt_core/deconfig/$frag" ]; then
                   cp -f "${GITHUB_WORKSPACE}/wrt_core/deconfig/$frag" "$CONFIG_TMP_DIR/$frag"
                 fi
@@ -236,9 +210,6 @@ jobs:
             echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
           fi
 
-          # ================================================================
-          # 上传到 Release Assets
-          # ================================================================
           echo "[5/5] 上传到 Release Assets ..."
 
           upload_asset() {
@@ -254,13 +225,11 @@ jobs:
             file_size=$(stat -c%s "$local_file" 2>/dev/null || stat -f%z "$local_file" 2>/dev/null)
             echo "  文件: ${asset_name} ($(du -h "$local_file" | cut -f1), ${file_size} bytes)"
 
-            # GitHub Release Asset 单文件限制 2GB
             if [ "$file_size" -gt 2147483648 ]; then
               echo "  跳过 ${asset_name}：超过 GitHub 2GB 限制"
               return 0
             fi
 
-            # 检查同名 asset 是否已存在
             existing_asset_id=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
               "https://api.github.com/repos/${UPLOAD_REPO}/releases/${release_id}/assets" \
               | grep -o '"id":[0-9]*,"name":"'${asset_name}'"' \
@@ -275,7 +244,6 @@ jobs:
               echo ""
             fi
 
-            # 上传新 asset
             echo "  上传 ${asset_name} ..."
             upload_url="https://uploads.github.com/repos/${UPLOAD_REPO}/releases/${release_id}/assets?name=${asset_name}"
 
@@ -302,7 +270,6 @@ jobs:
           upload_asset "/tmp/build2025_config.tar.gz"   ".config.tar.gz"
           echo "----------------------------------------"
 
-          # 清理临时文件
           rm -rf build2025 /tmp/build2025_*.tar.gz
 
           echo ""
@@ -313,7 +280,6 @@ jobs:
 
       - name: Get Kernel Verion
         run: |
-          # 获取内核版本（有防护：manifest 不存在时不会报错）
           manifest=$(ls ./firmware/*.manifest 2>/dev/null | head -n1)
           if [ -n "$manifest" ]; then
             KVER=$(grep -oP "kernel.*" "$manifest" | grep -oP "[4-6]\.[0-9]+\.[0-9]+" | head -n1)
@@ -325,7 +291,6 @@ jobs:
 
       - name: Delete Old Cache
         run: |
-          # 重试函数：最多重试3次，间隔3秒
           retry_delete() {
             local key="$1"
             local attempt=1
@@ -341,13 +306,11 @@ jobs:
             return 0
           }
 
-          # 保留最近一个缓存，删除其余旧的
           gh cache list --json key,createdAt \
             | jq -r 'sort_by(.createdAt) | reverse | .[1:] | .[].key' \
             | while read -r key; do
               retry_delete "$key"
             done
-          # 输出缓存状态
           echo "========cache status========"
           echo "ccache: $(du -sh ./action_build/.ccache | cut -f 1)"
           echo "staging: $(du -sh ./action_build/staging_dir | cut -f 1)"
@@ -378,15 +341,6 @@ jobs:
           echo "Firmware file count: $(ls -1 ./firmware 2>/dev/null | wc -l)"
           echo "===================================================="
 
-      - name: Package OpenWrt Firmware
-        if: ${{ inputs.model == 'n1_immwrt' }}
-        uses: unifreq/openwrt_packit@master
-        env:
-          OPENWRT_ARMVIRT: firmware/*.tar.gz
-          PACKAGE_SOC: s905d
-          KERNEL_VERSION_NAME: 6.6.y
-          WHOAMI: ZqinKing
-
       - name: Prepare Release Body
         run: |
           echo "云编译发布" > release_body.txt
@@ -400,6 +354,6 @@ jobs:
       - name: Release Firmware
         uses: softprops/action-gh-release@v2.5.0
         with:
-          tag_name: ${{ env.BUILD_DATE }}_${{ inputs.model }}
-          files: ${{ inputs.model == 'n1_immwrt' && env.PACKAGED_OUTPUTPATH || './firmware' }}/*.*
+          tag_name: ${{ env.BUILD_DATE }}_jdcloud_ipq60xx_immwrt
+          files: './firmware/*.*'
           body_path: ./release_body.txt
