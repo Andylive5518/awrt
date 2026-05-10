@@ -72,12 +72,6 @@ if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$BASE_PATH/../$BUILD_DIR/.config" 2>/
     fi
 fi
 
-# x86_64: distfeeds arch 修正（模板默认是 aarch64_cortex-a53）
-DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
-if [ -d "${DISTFEEDS_PATH%/*}" ] && [ -f "$DISTFEEDS_PATH" ]; then
-    sed -i 's/aarch64_cortex-a53/x86_64/g' "$DISTFEEDS_PATH"
-fi
-
 if [[ $Build_Mod == "debug" ]]; then
     exit 0
 fi

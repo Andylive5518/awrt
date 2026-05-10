@@ -346,15 +346,11 @@ install_opkg_distfeeds() {
     local emortal_def_dir="$BUILD_DIR/package/emortal/default-settings"
     local distfeeds_conf="$emortal_def_dir/files/99-distfeeds.conf"
     local ver_file="$BUILD_DIR/include/version.mk"
-    local config_file="$BUILD_DIR/.config"
 
     local version_number
     version_number=$(grep -m1 "^VERSION_NUMBER:=" "$ver_file" | sed 's/.*:=//' | tr -d ' ')
 
-    local arch="aarch64_cortex-a53"
-    if [ -f "$config_file" ] && grep -q "^CONFIG_TARGET_X86_64=y" "$config_file"; then
-        arch="x86_64"
-    fi
+    local arch="x86_64"
 
     if [ -d "$emortal_def_dir" ] && [ ! -f "$distfeeds_conf" ]; then
         cat >"$distfeeds_conf" <<EOF
