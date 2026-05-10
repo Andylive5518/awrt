@@ -209,8 +209,6 @@ remove_uhttpd_dependency
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
 
-# kernel 6.18+ 禁用 legacy iptables kmod（见 system.sh fix_legacy_iptables_kmod）
-
 # 确保 dockerd 不被 defconfig 清除（small8 feed 索引残留导致 defconfig 误删）
 if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$BASE_PATH/../$BUILD_DIR/.config" 2>/dev/null; then
     if [ -f "$BASE_PATH/../$BUILD_DIR/feeds/packages/utils/dockerd/Makefile" ]; then
@@ -232,7 +230,7 @@ fi
 
 TARGET_DIR="$BASE_PATH/../$BUILD_DIR/bin/targets"
 if [[ -d $TARGET_DIR ]]; then
-    find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec rm -f {} +
+    find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*combined.img" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" -o -name "*.vmdk" -o -name "*.vdi" -o -name "*.vhdx" \) -exec rm -f {} +
 fi
 
 make download -j$(($(nproc) * 2))
@@ -241,7 +239,7 @@ make -j$(($(nproc) + 1)) || make -j1 V=s
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"
 mkdir -p "$FIRMWARE_DIR"
-find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec cp -f {} "$FIRMWARE_DIR/" \;
+find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*combined.img" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" -o -name "*.vmdk" -o -name "*.vdi" -o -name "*.vhdx" \) -exec cp -f {} "$FIRMWARE_DIR/" \;
 \rm -f "$BASE_PATH/../firmware/Packages.manifest" 2>/dev/null
 
 if [[ -d action_build ]]; then
