@@ -33,11 +33,10 @@ COMMIT_HASH="none"
 apply_config() {
     \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
 
-    cat "$BASE_PATH/deconfig/compile_base.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-
-    cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-
-    cat "$BASE_PATH/deconfig/proxy.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+    for frag in "$BASE_PATH/deconfig/"*.config; do
+        [ "$frag" = "$CONFIG_FILE" ] && continue
+        cat "$frag" >> "$BASE_PATH/../$BUILD_DIR/.config"
+    done
 }
 
 remove_uhttpd_dependency() {
