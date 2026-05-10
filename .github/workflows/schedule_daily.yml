@@ -1,39 +1,19 @@
-name: Daily Build Scheduler
+name: Daily Build Scheduler (JD Cloud IPQ60xx)
 
 on:
   schedule:
     - cron: '0 20 * * 1'
   workflow_dispatch:
-    inputs:
-      model:
-        description: Build Model
-        required: false
-        default: all
-        type: choice
-        options:
-          - all
-          - release_wrt
-          - x64_immwrt
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  trigger-release:
+  trigger-build:
     permissions:
       actions: write
-      contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Trigger Release WRT
-        if: inputs.model == 'all' || inputs.model == 'release_wrt' || github.event_name == 'schedule'
+      - name: Trigger Release WRT (JD Cloud)
         run: |
-          gh workflow run release_wrt.yml -f model=jdcloud_ipq60xx_immwrt --repo ${{ github.repository }}
-
-      - name: Trigger X64 WRT
-        if: inputs.model == 'all' || inputs.model == 'x64_immwrt' || github.event_name == 'schedule'
-        run: |
-          gh workflow run release_wrt.yml -f model=x64_immwrt --repo ${{ github.repository }}
+          gh workflow run release_wrt.yml --ref ipq60xx --repo ${{ github.repository }}
