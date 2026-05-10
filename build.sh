@@ -34,7 +34,7 @@ apply_config() {
     \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
 
     for frag in "$BASE_PATH/deconfig/"*.config; do
-        [ "$frag" = "$CONFIG_FILE" ] && continue
+        [ "$(basename "$frag")" = "$(basename "$CONFIG_FILE")" ] && continue
         cat "$frag" >> "$BASE_PATH/../$BUILD_DIR/.config"
     done
 }

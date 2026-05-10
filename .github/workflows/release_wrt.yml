@@ -201,7 +201,7 @@ jobs:
               } > "$CONFIG_TMP_DIR/README.txt"
 
               for frag in "${GITHUB_WORKSPACE}/wrt_core/deconfig/"*.config; do
-                [ "$frag" = "$SEED_CONFIG" ] && continue
+                [ "$(basename "$frag")" = "$(basename "$SEED_CONFIG")" ] && continue
                 cp -f "$frag" "$CONFIG_TMP_DIR/$(basename "$frag")"
               done
             else
