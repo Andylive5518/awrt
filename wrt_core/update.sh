@@ -58,7 +58,7 @@ main() {
     change_cpuusage
     update_tcping
     fix_gettext_full_csharp
-    grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE" 2>/dev/null && update_util_linux
+    update_util_linux
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks

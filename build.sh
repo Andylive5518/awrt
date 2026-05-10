@@ -14,153 +14,22 @@ fi
 
 BASE_PATH=$(cd "$WRT_CORE_PATH" && pwd)
 
-Dev=$1
-Build_Mod=$2
+Build_Mod=$1
 
-SUPPORTED_DEVS=()
+REPO_URL="https://github.com/immortalwrt/immortalwrt.git"
+REPO_BRANCH="v24.10.6"
+BUILD_DIR="immortalwrt"
+COMMIT_HASH="none"
+CONFIG_FILE="$BASE_PATH/deconfig/x64_immwrt.config"
 
-collect_supported_devs() {
-    local ini_file
-    local dev_key
-    local IFS
+apply_config() {
+    \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
 
-    SUPPORTED_DEVS=()
+    cat "$BASE_PATH/deconfig/compile_base.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
 
-    for ini_file in "$BASE_PATH"/compilecfg/*.ini; do
-        [[ -f "$ini_file" ]] || continue
+    cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
 
-        dev_key=$(basename "$ini_file" .ini)
-        if [[ -f "$BASE_PATH/deconfig/$dev_key.config" ]]; then
-            SUPPORTED_DEVS+=("$dev_key")
-        fi
-    done
-
-    if [[ ${#SUPPORTED_DEVS[@]} -eq 0 ]]; then
-        return
-    fi
-
-    IFS=$'\n' SUPPORTED_DEVS=($(printf '%s\n' "${SUPPORTED_DEVS[@]}" | LC_ALL=C sort))
-}
-
-print_usage() {
-    echo "Usage: $0 <device> [debug]"
-}
-
-print_supported_devs() {
-    local index
-
-    echo "Supported devices:"
-    for ((index = 0; index < ${#SUPPORTED_DEVS[@]}; index++)); do
-        printf "  %d) %s\n" "$((index + 1))" "${SUPPORTED_DEVS[index]}"
-    done
-}
-
-prompt_select_dev() {
-    local input
-    local selected_index
-
-    while true; do
-        print_supported_devs
-        printf "Select device by number (q to quit): "
-
-        if ! read -r input; then
-            echo
-            echo "Cancelled."
-            exit 1
-        fi
-
-        if [[ "$input" =~ ^[[:space:]]*[qQ][[:space:]]*$ ]]; then
-            echo "Cancelled."
-            exit 1
-        fi
-
-        if [[ "$input" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ ]]; then
-            selected_index=${BASH_REMATCH[1]}
-            if ((selected_index >= 1 && selected_index <= ${#SUPPORTED_DEVS[@]})); then
-                Dev=${SUPPORTED_DEVS[selected_index - 1]}
-                return
-            fi
-        fi
-
-        echo "Invalid selection. Please enter a number between 1 and ${#SUPPORTED_DEVS[@]}."
-    done
-}
-
-prompt_select_build_mode() {
-    local input
-
-    while true; do
-        echo "Build mode:"
-        echo "  1) normal"
-        echo "  2) debug"
-        printf "Select build mode (1-2, q to quit): "
-
-        if ! read -r input; then
-            echo
-            echo "Cancelled."
-            exit 1
-        fi
-
-        if [[ "$input" =~ ^[[:space:]]*[qQ][[:space:]]*$ ]]; then
-            echo "Cancelled."
-            exit 1
-        fi
-
-        if [[ "$input" =~ ^[[:space:]]*1[[:space:]]*$ ]]; then
-            Build_Mod=""
-            return
-        fi
-
-        if [[ "$input" =~ ^[[:space:]]*2[[:space:]]*$ ]]; then
-            Build_Mod="debug"
-            return
-        fi
-
-        echo "Invalid selection. Please enter 1 or 2."
-    done
-}
-
-is_interactive_terminal() {
-    [[ -t 0 && -t 1 ]]
-}
-
-if [[ $# -eq 0 ]]; then
-    collect_supported_devs
-
-    if [[ ${#SUPPORTED_DEVS[@]} -eq 0 ]]; then
-        echo "Error: no supported devices found."
-        exit 1
-    fi
-
-    if ! is_interactive_terminal; then
-        print_usage
-        print_supported_devs
-        exit 1
-    fi
-
-    prompt_select_dev
-
-    if [[ -z $Build_Mod ]]; then
-        prompt_select_build_mode
-    fi
-fi
-
-CONFIG_FILE="$BASE_PATH/deconfig/$Dev.config"
-INI_FILE="$BASE_PATH/compilecfg/$Dev.ini"
-
-if [[ ! -f $CONFIG_FILE ]]; then
-    echo "Config not found: $CONFIG_FILE"
-    exit 1
-fi
-
-if [[ ! -f $INI_FILE ]]; then
-    echo "INI file not found: $INI_FILE"
-    exit 1
-fi
-
-read_ini_by_key() {
-    local key=$1
-    awk -F"=" -v key="$key" '$1 == key {print $2}' "$INI_FILE"
+    cat "$BASE_PATH/deconfig/proxy.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
 }
 
 remove_uhttpd_dependency() {
@@ -174,28 +43,6 @@ remove_uhttpd_dependency() {
         fi
     fi
 }
-
-apply_config() {
-    \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
-    
-    if grep -qE "(ipq60xx|ipq807x)" "$BASE_PATH/../$BUILD_DIR/.config" &&
-        ! grep -q "CONFIG_GIT_MIRROR" "$BASE_PATH/../$BUILD_DIR/.config"; then
-        cat "$BASE_PATH/deconfig/nss.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-    fi
-
-    cat "$BASE_PATH/deconfig/compile_base.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-
-    cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-
-    cat "$BASE_PATH/deconfig/proxy.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-}
-
-REPO_URL=$(read_ini_by_key "REPO_URL")
-REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
-REPO_BRANCH=${REPO_BRANCH:-main}
-BUILD_DIR=$(read_ini_by_key "BUILD_DIR")
-COMMIT_HASH=$(read_ini_by_key "COMMIT_HASH")
-COMMIT_HASH=${COMMIT_HASH:-none}
 
 if [[ -d action_build ]]; then
     BUILD_DIR="action_build"
@@ -217,11 +64,10 @@ if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$BASE_PATH/../$BUILD_DIR/.config" 2>/
     fi
 fi
 
-if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
-    DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
-    if [ -d "${DISTFEEDS_PATH%/*}" ] && [ -f "$DISTFEEDS_PATH" ]; then
-        sed -i 's/aarch64_cortex-a53/x86_64/g' "$DISTFEEDS_PATH"
-    fi
+# x86_64: distfeeds arch 修正（模板默认是 aarch64_cortex-a53）
+DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
+if [ -d "${DISTFEEDS_PATH%/*}" ] && [ -f "$DISTFEEDS_PATH" ]; then
+    sed -i 's/aarch64_cortex-a53/x86_64/g' "$DISTFEEDS_PATH"
 fi
 
 if [[ $Build_Mod == "debug" ]]; then
