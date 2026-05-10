@@ -58,7 +58,6 @@ main() {
     change_cpuusage
     update_tcping
     fix_gettext_full_csharp
-    grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE" 2>/dev/null && update_util_linux
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks
@@ -105,7 +104,6 @@ main() {
     install_pbr_cucc
     enable_ttyd_autologin
     fix_nikki_gobinpackage
-    fix_tuic_x86_downgrade
     fix_pbr_ip_forward
     # apply_hash_fixes
 }

@@ -546,29 +546,16 @@ update_oaf_deconfig() {
     local uci_def="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0"
     local disable_path="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/99_disable_oaf"
 
-    # 检测目标平台
-    local is_x86=0
-    if [ -f "$BUILD_DIR/.config" ] && grep -q "^CONFIG_TARGET_x86_64=y" "$BUILD_DIR/.config"; then
-        is_x86=1
-    fi
-
     if [ -d "${conf_path%/*}" ] && [ -f "$conf_path" ]; then
         sed -i \
             -e "s/record_enable '1'/record_enable '0'/g" \
             -e "s/disable_hnat '1'/disable_hnat '0'/g" \
+            -e "s/auto_load_engine '1'/auto_load_engine '0'/g" \
             "$conf_path"
-
-        if [ "$is_x86" = "0" ]; then
-            sed -i "s/auto_load_engine '1'/auto_load_engine '0'/g" "$conf_path"
-        fi
     fi
 
     if [ -d "${uci_def%/*}" ] && [ -f "$uci_def" ]; then
-        if [ "$is_x86" = "1" ]; then
-            sed -i '/disable_hnat/d' "$uci_def"
-        else
-            sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
-        fi
+        sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
 
         cat >"$disable_path" <<-EOF
 #!/bin/sh
@@ -1031,26 +1018,5 @@ fix_bandix_default_enabled() {
     if [ -f "$bandix_config" ]; then
         sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
         echo "[bandix] traffic/connections/dns 默认已启用"
-    fi
-}
-
-fix_tuic_x86_downgrade() {
-    # x86_64 使用 ImmortalWrt 24.10.6 (非最新版)，Rust 版本为 1.90 stable。
-    # small8 feed 的 tuic-client v1.8.0 在 release notes 中明确写了：
-    #   "Replaced manual match guards with Rust 1.95.0 if-let guards"
-    # v1.8.1 同样包含此特性（仅修复了日志双前缀 bug）。
-    # 因此 v1.8.0 和 v1.8.1 都需要 Rust >= 1.92 (nightly) / >= 1.95 (stable)。
-    # v1.7.2 不包含 if-let guard，可正常编译。此处将版本号回退到 1.7.2。
-    # 京东云等其他平台不受影响。
-    if ! grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE" 2>/dev/null; then
-        return 0
-    fi
-
-    local tuic_mk="$BUILD_DIR/feeds/small8/tuic-client/Makefile"
-    [ -f "$tuic_mk" ] || return 0
-
-    if grep -q "PKG_VERSION:=1.8.1" "$tuic_mk"; then
-        sed -i 's/PKG_VERSION:=1.8.1/PKG_VERSION:=1.7.2/' "$tuic_mk"
-        echo "[tuic-client] x86_64: downgraded v1.8.1 → v1.7.2 (v1.8.0 also has if-let guard, Rust 1.90)"
     fi
 }
