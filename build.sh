@@ -16,11 +16,19 @@ BASE_PATH=$(cd "$WRT_CORE_PATH" && pwd)
 
 Build_Mod=$1
 
-REPO_URL="https://github.com/immortalwrt/immortalwrt.git"
-REPO_BRANCH="v24.10.6"
-BUILD_DIR="immortalwrt"
-COMMIT_HASH="none"
 CONFIG_FILE="$BASE_PATH/deconfig/x64_immwrt.config"
+INI_FILE="$BASE_PATH/compilecfg/x64_immwrt.ini"
+
+read_ini_by_key() {
+    local key=$1
+    awk -F"=" -v key="$key" '$1 == key {print $2}' "$INI_FILE"
+}
+
+REPO_URL=$(read_ini_by_key "REPO_URL")
+REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
+REPO_BRANCH=${REPO_BRANCH:-main}
+BUILD_DIR=$(read_ini_by_key "BUILD_DIR")
+COMMIT_HASH="none"
 
 apply_config() {
     \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
