@@ -360,11 +360,11 @@ install_opkg_distfeeds() {
     if [ -d "$emortal_def_dir" ]; then
         # 始终覆盖 distfeeds.conf，确保 URL 最新
         cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/base/
-src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/luci/
-src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/packages/
-src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/routing/
-src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/telephony/
+src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/base/
+src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/luci/
+src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/packages/
+src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/routing/
+src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/telephony/
 EOF
 
         # 仅在首次注入 install 规则和 uci-defaults mv 命令
@@ -378,7 +378,7 @@ EOF
 sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\\n" $emortal_def_dir/files/99-default-settings
         fi
 
-        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, raw: ${raw_version}, USTC)"
+        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, raw: ${raw_version})"
     fi
 
     # 修复 ImmortalWrt build system 生成的 distfeeds 模板中未展开的变量
@@ -387,7 +387,7 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\\n" $emortal_def_dir/files
         local fixed=0
         while IFS= read -r -d '' f; do
             sed -i "s|\\$(call.q*strip,\\$(CONFIG_VERSION_NUMBER))|${version_number}|g" "$f"
-            sed -i "s|mirrors.vsean.net/openwrt|mirrors.ustc.edu.cn/immortalwrt|g" "$f"
+            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
             fixed=1
         done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
             -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
@@ -402,8 +402,8 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\\n" $emortal_def_dir/files
     # 该文件没有扩展名，上面的 find *.conf|*.mk|*.sh 匹配不到
     local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
     if [ -f "$chn_settings" ]; then
-        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://mirrors.ustc.edu.cn/immortalwrt|g' "$chn_settings"
-        echo "[mirror] 99-default-settings-chinese 镜像已改为 USTC"
+        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://downloads.immortalwrt.org|g' "$chn_settings"
+        echo "[mirror] 99-default-settings-chinese 镜像已改为官方"
     fi
 }
 
