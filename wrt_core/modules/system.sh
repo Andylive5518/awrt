@@ -566,6 +566,7 @@ update_oaf_deconfig() {
 
     if [ -d "${conf_path%/*}" ] && [ -f "$conf_path" ]; then
         sed -i \
+            -e "s/auto_load_engine '0'/auto_load_engine '1'/g" \
             -e "s/record_enable '1'/record_enable '0'/g" \
             -e "s/disable_hnat '1'/disable_hnat '0'/g" \
             "$conf_path"
