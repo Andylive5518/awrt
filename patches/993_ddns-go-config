@@ -1,0 +1,7 @@
+#!/bin/sh
+# ddns-go 菜单 JSON 有 uci depends 条件，但 ddns-go 不产生 UCI 配置
+# 创建最小 /etc/config/ddns-go 满足条件，让菜单正常显示
+[ -f /etc/config/ddns-go ] || cat > /etc/config/ddns-go <<'CFG'
+config ddns-go 'config'
+CFG
+exit 0
