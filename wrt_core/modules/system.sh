@@ -569,21 +569,30 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    local conf_path="$BUILD_DIR/feeds/small8/open-app-filter/files/appfilter.config"
-    local uci_def="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0"
-    local disable_path="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/99_disable_oaf"
+    # open-app-filter 可能来自多个 feed（small8 或 packages），用 find 定位
+    local appfilter_conf
+    appfilter_conf=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null | head -1)
+    local uci_def
+    uci_def=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null | head -1)
+    local disable_path
+    disable_path=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null | head -1)
+    [ -n "$disable_path" ] && disable_path="$disable_path/99_disable_oaf"
 
-    if [ -d "${conf_path%/*}" ] && [ -f "$conf_path" ]; then
+    if [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ]; then
         sed -i \
-            -e "s/auto_load_engine '0'/auto_load_engine '1'/g" \
+            -e "s/auto_load_engine '[01]'/auto_load_engine '1'/g" \
             -e "s/record_enable '1'/record_enable '0'/g" \
             -e "s/disable_hnat '1'/disable_hnat '0'/g" \
-            "$conf_path"
+            "$appfilter_conf"
+        echo "[OAF] x86_64: auto_load_engine=1, record_enable=0, disable_hnat=0 ($appfilter_conf)"
     fi
 
-    if [ -d "${uci_def%/*}" ] && [ -f "$uci_def" ]; then
+    if [ -n "$uci_def" ] && [ -f "$uci_def" ]; then
         sed -i '/disable_hnat/d' "$uci_def"
+        echo "[OAF] uci_def: removed disable_hnat, kept auto_load_engine=1 ($uci_def)"
+    fi
 
+    if [ -n "$disable_path" ]; then
         cat >"$disable_path" <<-EOF
 #!/bin/sh
 [ "\$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
