@@ -482,6 +482,13 @@ update_menu_location() {
         find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
     fi
 
+    # ddns-go: 去掉 uci depends 条件（ddns-go 不用 UCI 配置，/etc/config/ddns-go 不存在导致菜单被隐藏）
+    local ddnsgo_menu_dir
+    ddnsgo_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-ddns-go/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+    if [ -n "$ddnsgo_menu_dir" ] && [ -d "$ddnsgo_menu_dir" ]; then
+        find "$ddnsgo_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i '/"uci":.*"ddns-go".*true/d' {} \;
+    fi
+
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=7)
     local bandix_menu_dir
     bandix_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
