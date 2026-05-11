@@ -376,11 +376,12 @@ update_dockerman() {
 
         local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
         if [ -f "$cfg_lua" ]; then
-            sed -i '/hub-mirror\.c\.163\.com/d' "$cfg_lua"
-            sed -i "/o = s:option(DynamicList, \"registry_mirrors\"/a\\
-\to:value(\"https://docker.1ms.run\", \"https://docker.1ms.run\")\\
-\to:value(\"https://docker.xuanyuan.me\", \"https://docker.xuanyuan.me\")\\
-\to:value(\"https://docker.m.daocloud.io\", \"https://docker.m.daocloud.io\")" "$cfg_lua"
+            # s:option() 是多行函数调用，不能用 a\ 在匹配行后插入，会拆断括号
+            # 改用 c\ 替换 hub-mirror 整行，不影响上方的多行 s:option() 结构
+            sed -i '/hub-mirror\.c\.163\.com/c\
+o:value("https://docker.1ms.run", "https://docker.1ms.run")\
+o:value("https://docker.xuanyuan.me", "https://docker.xuanyuan.me")\
+o:value("https://docker.m.daocloud.io", "https://docker.m.daocloud.io")' "$cfg_lua"
             echo "dockerman registry_mirrors 预设值已更换为国内加速站"
         fi
 
