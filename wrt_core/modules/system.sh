@@ -668,6 +668,19 @@ fix_opkg_check() {
 }
 
 fix_netfilter_kmod_clash() {
+    # OpenWrt issue #22992: kmod-nf-ipt and kmod-iptables both ship
+    # ip_tables.ko / x_tables.ko on kernel 6.18+, causing file clash.
+    #
+    # Upstream fix (dqsq2e2): keep kmod-iptables as the owner of those
+    # .ko files, and filter them out of kmod-nf-ipt's FILES/AUTOLOAD.
+    # DEPENDS must remain +!LINUX_6_12:kmod-iptables so that kmod-nf-ipt
+    # depends on kmod-iptables (which enables CONFIG_IP_NF_IPTABLES_LEGACY
+    # in the kernel, actually building ip_tables.ko).
+    #
+    # Previous AWRT workaround changed DEPENDS to exclude LINUX_6_18 as
+    # well — this prevented the file clash but also prevented ip_tables.ko
+    # from being built at all, causing "module ip_tables.ko missing" errors.
+
     local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
 
     if [ ! -f "$netfilter_mk" ]; then
@@ -675,32 +688,42 @@ fix_netfilter_kmod_clash() {
         return 1
     fi
 
-    if grep -q 'DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables' "$netfilter_mk"; then
-        echo "Netfilter kmod clash workaround already applied"
-        return 0
-    fi
-
-    if grep -q 'DEPENDS:=+!LINUX_6_12:kmod-iptables' "$netfilter_mk"; then
-        echo "Applying netfilter kmod clash workaround for Linux 6.12/6.18..."
-        sed -i 's/DEPENDS:=+!LINUX_6_12:kmod-iptables/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/' "$netfilter_mk"
-        return 0
-    fi
-
-    if grep -q 'DEPENDS:=+(!LINUX_6_12&&!LINUX_6_18):kmod-iptables' "$netfilter_mk"; then
-        echo "Normalizing netfilter kmod clash workaround expression..."
-        sed -i 's/DEPENDS:=+(!LINUX_6_12\&\&!LINUX_6_18):kmod-iptables/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/' "$netfilter_mk"
-        return 0
-    fi
-
-    # kernel 6.6 (openwrt-24.10) 不存在 kmod-iptables 版本门控，
-    # iptables/nf_tables 共存无冲突，无需 workaround
+    # kernel 6.6 (openwrt-24.10) — no kmod-iptables version gate at all,
+    # iptables/nf_tables coexist without conflict, nothing to do
     if ! grep -q 'kmod-iptables' "$netfilter_mk"; then
         echo "Netfilter kmod clash workaround not applicable (no kmod-iptables gate found)"
         return 0
     fi
 
-    echo "Netfilter kmod clash workaround target not found in $netfilter_mk" >&2
-    return 1
+    # Idempotent guard: filter-out already applied
+    if grep -q 'filter-out ipv4/netfilter/ip_tables netfilter/x_tables' "$netfilter_mk"; then
+        echo "Netfilter kmod filter-out workaround already applied"
+        return 0
+    fi
+
+    # Step 1: Revert any stale AWRT-style DEPENDS mangling back to upstream
+    # Old AWRT: +(!(LINUX_6_12||LINUX_6_18)):kmod-iptables — BROKEN on 6.18
+    # Upstream: +!LINUX_6_12:kmod-iptables — correct; kmod-iptables owns ip_tables.ko
+    local depends_line
+    depends_line=$(grep 'DEPENDS:=+.*:kmod-iptables' "$netfilter_mk" | head -1)
+    if echo "$depends_line" | grep -q '(LINUX_6_12.*LINUX_6_18)'; then
+        echo "Reverting AWRT netfilter DEPENDS to upstream form..."
+        sed -i '/^define KernelPackage\/nf-ipt$/,/^endef$/{
+            s/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/DEPENDS:=+!LINUX_6_12:kmod-iptables/
+            s/DEPENDS:=+(!LINUX_6_12&&!LINUX_6_18):kmod-iptables/DEPENDS:=+!LINUX_6_12:kmod-iptables/
+        }' "$netfilter_mk"
+    fi
+
+    # Step 2: Apply filter-out to FILES and AUTOLOAD inside KernelPackage/nf-ipt
+    # Removes ip_tables.ko / x_tables.ko from kmod-nf-ipt so kmod-iptables
+    # is the sole owner — no file clash at opkg install time.
+    echo "Applying netfilter kmod filter-out workaround (upstream openwrt#22992)..."
+    sed -i '/^define KernelPackage\/nf-ipt$/,/^endef$/{
+        s|FILES:=\$(foreach mod,\$(NF_IPT-m),\$(LINUX_DIR)/net/\$(mod)\.ko)|FILES:=\$(foreach mod,\$(filter-out ipv4/netfilter/ip_tables netfilter/x_tables,\$(NF_IPT-m)),\$(LINUX_DIR)/net/\$(mod).ko)|
+        s|AUTOLOAD:=\$(call AutoProbe,\$(notdir \$(NF_IPT-m)))|AUTOLOAD:=\$(call AutoProbe,\$(notdir \$(filter-out ipv4/netfilter/ip_tables netfilter/x_tables,\$(NF_IPT-m))))|
+    }' "$netfilter_mk"
+
+    return 0
 }
 
 install_pbr_cmcc() {
