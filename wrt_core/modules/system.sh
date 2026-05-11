@@ -449,10 +449,13 @@ update_menu_location() {
     local app
     for app in $proxy_apps; do
         # 方式1: JSON 菜单文件 (homeproxy/momo/nikki 及 feed 自带 JSON 的 app)
+        # menu.d 在 feeds/ 下深度 7-8 (如 feeds/small8/luci-app-xxx/root/usr/share/luci/menu.d/)
+        # maxdepth 9 确保覆盖 luci feed 的 applications/ 子目录嵌套
         local menu_dir
-        menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+        menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
         if [ -n "$menu_dir" ] && [ -d "$menu_dir" ]; then
             find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
+            echo "[menu] $app: services -> vpn (JSON menu.d)"
         fi
 
         # 方式2: Controller lua 文件 (passwall/passwall2/openclash)
@@ -469,22 +472,26 @@ update_menu_location() {
     done
 
     # PBR (策略路由) 移到"网络"菜单
+    # luci feed 有 applications/ 子目录嵌套, menu.d 深度 8
     local pbr_menu_dir
-    pbr_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-pbr/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+    pbr_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-pbr/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
     if [ -n "$pbr_menu_dir" ] && [ -d "$pbr_menu_dir" ]; then
         find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+        echo "[menu] pbr: services -> network"
     fi
 
     # WOL (网络唤醒) 移到"网络"菜单
     local wol_menu_dir
-    wol_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-wol/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+    wol_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-wol/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
     if [ -n "$wol_menu_dir" ] && [ -d "$wol_menu_dir" ]; then
         find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+        echo "[menu] wol: services -> network"
     fi
 
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=7)
+    # bandix 可能来自 luci_app_bandix feed, menu.d 深度 7
     local bandix_menu_dir
-    bandix_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+    bandix_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
     if [ -n "$bandix_menu_dir" ] && [ -d "$bandix_menu_dir" ]; then
         find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
             -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
@@ -494,6 +501,7 @@ update_menu_location() {
         if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
             sed -i 's/"order": 90/"order": 7/' "$bandix_json"
         fi
+        echo "[menu] bandix: network -> status (order=7)"
     fi
 }
 
