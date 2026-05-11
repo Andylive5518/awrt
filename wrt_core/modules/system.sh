@@ -369,13 +369,13 @@ EOF
 
         # 仅在首次注入 install 规则和 uci-defaults mv 命令
         if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
-            sed -i "/define Package\/default-settings\/install/a\\\\
-\\t\\\$(INSTALL_DIR) \\\$(1)/etc\\\\
-\\t\\\$(INSTALL_DATA) ./files/99-distfeeds.conf \\\$(1)/etc/99-distfeeds.conf\\n" $emortal_def_dir/Makefile
+            sed -i "/define Package\/default-settings\/install/a\\
+\t\$(INSTALL_DIR) \$(1)/etc\\
+\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" $emortal_def_dir/Makefile
 
-            sed -i "/exit 0/i\\\\
-[ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\\\
-sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\\n" $emortal_def_dir/files/99-default-settings
+            sed -i "/exit 0/i\\
+[ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
+sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
         fi
 
         echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, raw: ${raw_version})"
