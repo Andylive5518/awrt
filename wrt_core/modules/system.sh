@@ -348,7 +348,9 @@ install_opkg_distfeeds() {
     local ver_file="$BUILD_DIR/include/version.mk"
 
     local version_number
-    version_number=$(grep -m1 "^VERSION_NUMBER:=" "$ver_file" | sed 's/.*:=//' | tr -d ' ')
+    # VERSION_NUMBER 有两行：第1行是 $(call qstrip,...) 模板，第2行 $(if ...,fallback)
+    # 需要取 fallback 值（如 24.10.6），不是模板
+    version_number=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
 
     local arch="x86_64"
 
