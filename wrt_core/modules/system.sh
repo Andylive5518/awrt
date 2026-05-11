@@ -433,33 +433,45 @@ update_menu_location() {
     fi
 
     # 将代理类应用从"服务"移到"VPN"菜单
+    # passwall/passwall2/openclash 使用传统 controller lua 定义菜单（无 menu.d/*.json）
+    # homeproxy/momo/nikki 使用 JSON 菜单文件
+    # luci feed 有 applications/ 子目录嵌套，不能用 $feed_dir/luci-app-$app 直接构造路径
     local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
-    local feed_dir
-    for feed_dir in "$BUILD_DIR/feeds/"*/; do
-        local app
-        for app in $proxy_apps; do
-            local menu_dir="$feed_dir/luci-app-$app/root/usr/share/luci/menu.d"
-            if [ -d "$menu_dir" ]; then
-                find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
-            fi
-        done
+    local app
+    for app in $proxy_apps; do
+        # 方式1: JSON 菜单文件 (homeproxy/momo/nikki 及 feed 自带 JSON 的 app)
+        local menu_dir
+        menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+        if [ -n "$menu_dir" ] && [ -d "$menu_dir" ]; then
+            find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
+        fi
+
+        # 方式2: Controller lua 文件 (passwall/passwall2/openclash)
+        # passwall/passwall2 使用 appname 变量 (appname="passwall")，openclash 用字面字符串
+        local ctrl_file
+        ctrl_file=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path "*/luci-app-$app/luasrc/controller/$app.lua" 2>/dev/null | head -1)
+        if [ -n "$ctrl_file" ] && [ -f "$ctrl_file" ]; then
+            # 模式A: 字面 app 名 (如 openclash)
+            sed -i "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" "$ctrl_file"
+            # 模式B: appname 变量 (如 passwall: appname="passwall")
+            sed -i 's/"admin", "services", appname/"admin", "vpn", appname/g' "$ctrl_file"
+            echo "[menu] $app: services -> vpn (controller lua)"
+        fi
     done
 
     # PBR (策略路由) 移到"网络"菜单
-    for feed_dir in "$BUILD_DIR/feeds/"*/; do
-        local pbr_menu_dir="$feed_dir/luci-app-pbr/root/usr/share/luci/menu.d"
-        if [ -d "$pbr_menu_dir" ]; then
-            find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-        fi
-    done
+    local pbr_menu_dir
+    pbr_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-pbr/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+    if [ -n "$pbr_menu_dir" ] && [ -d "$pbr_menu_dir" ]; then
+        find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+    fi
 
     # WOL (网络唤醒) 移到"网络"菜单
-    for feed_dir in "$BUILD_DIR/feeds/"*/; do
-        local wol_menu_dir="$feed_dir/luci-app-wol/root/usr/share/luci/menu.d"
-        if [ -d "$wol_menu_dir" ]; then
-            find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-        fi
-    done
+    local wol_menu_dir
+    wol_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path "*/luci-app-wol/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
+    if [ -n "$wol_menu_dir" ] && [ -d "$wol_menu_dir" ]; then
+        find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+    fi
 
     # Bandix 移到"状态"菜单，排在 WireGuard 上面
     local bandix_menu_dir="$BUILD_DIR/feeds/luci_app_bandix/luci-app-bandix/root/usr/share/luci/menu.d"
