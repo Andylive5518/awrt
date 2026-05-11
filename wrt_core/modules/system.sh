@@ -478,10 +478,10 @@ update_menu_location() {
     if [ -d "$bandix_menu_dir" ]; then
         find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
             -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
-        # WireGuard 在状态菜单的 order 通常是 4，bandix 设 3 排在它上面
+        # WireGuard 在状态菜单的 order 通常是 4，bandix 设 7 排在它下面
         local bandix_json="$bandix_menu_dir/luci-app-bandix.json"
         if [ -f "$bandix_json" ]; then
-            sed -i 's/"order": 90/"order": 3/' "$bandix_json"
+            sed -i 's/"order": 90/"order": 7/' "$bandix_json"
         fi
     fi
 }
@@ -1021,10 +1021,12 @@ fix_nikki_gobinpackage() {
 }
 
 fix_bandix_default_enabled() {
-    local bandix_config="$BUILD_DIR/feeds/openwrt_bandix/openwrt-bandix/files/bandix.config"
-    if [ -f "$bandix_config" ]; then
+    # openwrt-bandix 可能来自多个 feed（small8 或 openwrt_bandix），用 find 定位
+    local bandix_config
+    bandix_config=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -type f -path '*/openwrt-bandix/files/bandix.config' 2>/dev/null | head -1)
+    if [ -n "$bandix_config" ] && [ -f "$bandix_config" ]; then
         sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
-        echo "[bandix] traffic/connections/dns 默认已启用"
+        echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
     fi
 }
 
