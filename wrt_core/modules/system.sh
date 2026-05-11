@@ -352,35 +352,41 @@ install_opkg_distfeeds() {
 
     local arch="x86_64"
 
-    if [ -d "$emortal_def_dir" ] && [ ! -f "$distfeeds_conf" ]; then
+    if [ -d "$emortal_def_dir" ]; then
+        # 始终覆盖 distfeeds.conf，确保 URL 最新
         cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/base/
-src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/luci/
-src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/packages/
-src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/routing/
-src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/telephony/
+src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/base/
+src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/luci/
+src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/packages/
+src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/routing/
+src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/telephony/
 EOF
 
-        sed -i "/define Package\/default-settings\/install/a\\
-\t\$(INSTALL_DIR) \$(1)/etc\\
-\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" $emortal_def_dir/Makefile
+        # 仅在首次注入 install 规则和 uci-defaults mv 命令
+        if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
+            sed -i "/define Package\/default-settings\/install/a\\\\
+\\t\\\$(INSTALL_DIR) \\\$(1)/etc\\\\
+\\t\\\$(INSTALL_DATA) ./files/99-distfeeds.conf \\\$(1)/etc/99-distfeeds.conf\\n" $emortal_def_dir/Makefile
 
-        sed -i "/exit 0/i\\
-[ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
-sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+            sed -i "/exit 0/i\\\\
+[ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\\\
+sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\\n" $emortal_def_dir/files/99-default-settings
+        fi
+
+        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, USTC)"
     fi
 
     # 修复 ImmortalWrt build system 生成的 distfeeds 模板中未展开的变量
     # ImmortalWrt 的 distfeeds.conf 是由 build system 动态生成的，
     # 模板里 $(call qstrip,$(CONFIG_VERSION_NUMBER)) 在某些构建路径下不会被展开
-    # 直接 find + sed 暴力替换，确保无论模板在哪都会被修复
+    # find 范围覆盖 package/ include/ scripts/ feeds/ — 模板可能在 feeds 中
     if [ -n "$version_number" ]; then
         local fixed=0
         while IFS= read -r -d '' f; do
-            sed -i "s|\$(call qstrip,\$(CONFIG_VERSION_NUMBER))|${version_number}|g" "$f"
-            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
+            sed -i "s|\\$(call.q*strip,\\$(CONFIG_VERSION_NUMBER))|${version_number}|g" "$f"
+            sed -i "s|mirrors.vsean.net/openwrt|mirrors.ustc.edu.cn/immortalwrt|g" "$f"
             fixed=1
-        done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" \
+        done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
             -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
             -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
 
