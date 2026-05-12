@@ -570,29 +570,36 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    local conf_path="$BUILD_DIR/feeds/small8/open-app-filter/files/appfilter.config"
-    local uci_def="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0"
-    local disable_path="$BUILD_DIR/feeds/small8/luci-app-oaf/root/etc/uci-defaults/99_disable_oaf"
+    local appfilter_conf
+    appfilter_conf=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null | head -1)
+    local uci_def
+    uci_def=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null | head -1)
+    local disable_dir
+    disable_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null | head -1)
 
-    if [ -d "${conf_path%/*}" ] && [ -f "$conf_path" ]; then
+    if [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ]; then
         sed -i \
             -e "s/record_enable '1'/record_enable '0'/g" \
             -e "s/disable_hnat '1'/disable_hnat '0'/g" \
-            -e "s/auto_load_engine '1'/auto_load_engine '0'/g" \
-            "$conf_path"
+            -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" \
+            "$appfilter_conf"
+        echo "[OAF] ipq60xx: auto_load_engine=0, record_enable=0, disable_hnat=0 ($appfilter_conf)"
     fi
 
-    if [ -d "${uci_def%/*}" ] && [ -f "$uci_def" ]; then
+    if [ -n "$uci_def" ] && [ -f "$uci_def" ]; then
         sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
+        echo "[OAF] uci_def: removed disable_hnat + auto_load_engine ($uci_def)"
 
-        cat >"$disable_path" <<-EOF
+        if [ -n "$disable_dir" ]; then
+            cat >"$disable_dir/99_disable_oaf" <<-EOF
 #!/bin/sh
 [ "\$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
     /etc/init.d/appfilter disable
     /etc/init.d/appfilter stop
 }
 EOF
-        chmod +x "$disable_path"
+            chmod +x "$disable_dir/99_disable_oaf"
+        fi
     fi
 }
 
