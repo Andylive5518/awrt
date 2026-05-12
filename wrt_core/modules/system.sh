@@ -589,36 +589,60 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    local appfilter_conf
-    appfilter_conf=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null | head -1)
-    local uci_def
-    uci_def=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null | head -1)
-    local disable_dir
-    disable_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null | head -1)
+    # open-app-filter 可能来自多个 feed（small8 或 packages），用 find 定位
+    # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
+    local appfilter_confs
+    appfilter_confs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
+    local uci_defs
+    uci_defs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
+    local disable_dirs
+    disable_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
-    if [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ]; then
-        sed -i \
-            -e "s/record_enable '1'/record_enable '0'/g" \
-            -e "s/disable_hnat '1'/disable_hnat '0'/g" \
-            -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" \
-            "$appfilter_conf"
-        echo "[OAF] ipq60xx: auto_load_engine=0, record_enable=0, disable_hnat=0 ($appfilter_conf)"
+    # 修改 appfilter.config（所有 feed 副本）
+    # ipq60xx: auto_load_engine=0（ARM 内核模块兼容性问题）
+    if [ -n "$appfilter_confs" ]; then
+        while IFS= read -r appfilter_conf; do
+            [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
+            sed -i \
+                -e "s/record_enable '1'/record_enable '0'/g" \
+                -e "s/disable_hnat '1'/disable_hnat '0'/g" \
+                -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" \
+                "$appfilter_conf"
+            echo "[OAF] ipq60xx: auto_load_engine=0, record_enable=0, disable_hnat=0 — $appfilter_conf"
+        done <<< "$appfilter_confs"
     fi
 
-    if [ -n "$uci_def" ] && [ -f "$uci_def" ]; then
-        sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
-        echo "[OAF] uci_def: removed disable_hnat + auto_load_engine ($uci_def)"
+    # 修改 94_feature_3.0（所有 feed 副本）
+    # ipq60xx: 同时删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
+    if [ -n "$uci_defs" ]; then
+        while IFS= read -r uci_def; do
+            [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
+            local cleaned=0
+            if grep -q 'disable_hnat\|auto_load_engine' "$uci_def" 2>/dev/null; then
+                sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
+                cleaned=1
+            fi
+            [ "$cleaned" = "1" ] \
+                && echo "[OAF] uci_def: removed disable_hnat + auto_load_engine — $uci_def" \
+                || echo "[OAF] uci_def: already clean — $uci_def"
+        done <<< "$uci_defs"
+    fi
 
-        if [ -n "$disable_dir" ]; then
-            cat >"$disable_dir/99_disable_oaf" <<-EOF
+    # 创建 99_disable_oaf（所有 feed 副本的 uci-defaults 目录）
+    if [ -n "$disable_dirs" ]; then
+        while IFS= read -r disable_dir; do
+            [ -n "$disable_dir" ] && [ -d "$disable_dir" ] || continue
+            local disable_path="$disable_dir/99_disable_oaf"
+            cat >"$disable_path" <<-'EOF'
 #!/bin/sh
-[ "\$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
+[ "$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
     /etc/init.d/appfilter disable
     /etc/init.d/appfilter stop
 }
 EOF
-            chmod +x "$disable_dir/99_disable_oaf"
-        fi
+            chmod +x "$disable_path"
+            echo "[OAF] 99_disable_oaf created — $disable_path"
+        done <<< "$disable_dirs"
     fi
 }
 
