@@ -1114,6 +1114,30 @@ fix_nikki_gobinpackage() {
     fi
 }
 
+fix_tuic_downgrade() {
+    # ImmortalWrt 24.10 使用 Rust 1.90 stable，main 分支自编译 Rust 1.94。
+    # tuic-client v1.8.0+ 使用 if-let guard（稳定于 Rust 1.95），均无法编译。
+    # v1.7.2 不含此特性，可正常编译。此处将版本回退到 1.7.2。
+    # small8 feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
+    # 适用：x86_64 (24.10/Rust 1.90) + ipq60xx ARM64 (main/Rust 1.94)
+    local tuic_mk
+    tuic_mk=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -path '*/small8/tuic-client/Makefile' 2>/dev/null | head -1)
+    [ -n "$tuic_mk" ] && [ -f "$tuic_mk" ] || return 0
+
+    local current_ver
+    current_ver=$(grep -oP '^PKG_VERSION:=\K[0-9.]+' "$tuic_mk" 2>/dev/null)
+
+    case "$current_ver" in
+        1.8.[01])
+            sed -i "s/PKG_VERSION:=${current_ver}/PKG_VERSION:=1.7.2/" "$tuic_mk"
+            echo "[tuic-client] downgraded v${current_ver} → v1.7.2 (if-let guard needs Rust ≥1.95)"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
 fix_bandix_default_enabled() {
     # openwrt-bandix 可能来自多个 feed（small8 或 openwrt_bandix），用 find 定位
     local bandix_config
