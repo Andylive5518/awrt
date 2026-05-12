@@ -446,63 +446,82 @@ update_menu_location() {
     # passwall/passwall2/openclash 使用传统 controller lua 定义菜单（无 menu.d/*.json）
     # homeproxy/momo/nikki 使用 JSON 菜单文件
     # luci feed 有 applications/ 子目录嵌套，不能用 $feed_dir/luci-app-$app 直接构造路径
+    # pitfall: ext4 readdir 非字母序，head -1 可能选中非编译 feed 的副本；改为遍历所有匹配项
     local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
     local app
     for app in $proxy_apps; do
         # 方式1: JSON 菜单文件 (homeproxy/momo/nikki 及 feed 自带 JSON 的 app)
-        # menu.d 在 feeds/ 下深度 7-8 (如 feeds/small8/luci-app-xxx/root/usr/share/luci/menu.d/)
-        # maxdepth 9 确保覆盖 luci feed 的 applications/ 子目录嵌套
-        local menu_dir
-        menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
-        if [ -n "$menu_dir" ] && [ -d "$menu_dir" ]; then
-            find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
-            echo "[menu] $app: services -> vpn (JSON menu.d)"
+        # menu.d 在 feeds/ 下深度 7-8，maxdepth 9 确保覆盖 luci feed 的 applications/ 子目录
+        local menu_dirs
+        menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null)
+        if [ -n "$menu_dirs" ]; then
+            while IFS= read -r menu_dir; do
+                [ -n "$menu_dir" ] && [ -d "$menu_dir" ] || continue
+                find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
+                echo "[menu] $app: services -> vpn (JSON menu.d) — $menu_dir"
+            done <<< "$menu_dirs"
         fi
 
         # 方式2: Controller lua 文件 (passwall/passwall2/openclash)
         # passwall/passwall2 使用 appname 变量 (appname="passwall")，openclash 用字面字符串
-        local ctrl_file
-        ctrl_file=$(find "$BUILD_DIR/feeds/" -maxdepth 5 -type f -path "*/luci-app-$app/luasrc/controller/$app.lua" 2>/dev/null | head -1)
-        if [ -n "$ctrl_file" ] && [ -f "$ctrl_file" ]; then
-            # 模式A: 字面 app 名 (如 openclash)
-            sed -i "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" "$ctrl_file"
-            # 模式B: appname 变量 (如 passwall: appname="passwall")
-            sed -i 's/"admin", "services", appname/"admin", "vpn", appname/g' "$ctrl_file"
-            echo "[menu] $app: services -> vpn (controller lua)"
+        # maxdepth 8 覆盖 luci/applications/ 等深层嵌套
+        local ctrl_files
+        ctrl_files=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path "*/luci-app-$app/luasrc/controller/$app.lua" 2>/dev/null)
+        if [ -n "$ctrl_files" ]; then
+            while IFS= read -r ctrl_file; do
+                [ -n "$ctrl_file" ] && [ -f "$ctrl_file" ] || continue
+                # 模式A: 字面 app 名 (如 openclash)
+                sed -i "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" "$ctrl_file"
+                # 模式B: appname 变量 (如 passwall: appname="passwall")
+                sed -i 's/"admin", "services", appname/"admin", "vpn", appname/g' "$ctrl_file"
+                # 验证 sed 是否实际匹配到了内容
+                if grep -q '"admin", "vpn", appname\|"admin", "vpn", "'"$app"'"' "$ctrl_file" 2>/dev/null; then
+                    echo "[menu] $app: services -> vpn (controller lua, verified) — $ctrl_file"
+                else
+                    echo "[menu] $app: controller lua found but sed may not have matched — $ctrl_file"
+                fi
+            done <<< "$ctrl_files"
         fi
     done
 
     # PBR (策略路由) 移到"网络"菜单
-    # luci feed 有 applications/ 子目录嵌套, menu.d 深度 8
-    local pbr_menu_dir
-    pbr_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-pbr/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
-    if [ -n "$pbr_menu_dir" ] && [ -d "$pbr_menu_dir" ]; then
-        find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-        echo "[menu] pbr: services -> network"
+    local pbr_menu_dirs
+    pbr_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-pbr/root/usr/share/luci/menu.d" 2>/dev/null)
+    if [ -n "$pbr_menu_dirs" ]; then
+        while IFS= read -r pbr_menu_dir; do
+            [ -n "$pbr_menu_dir" ] && [ -d "$pbr_menu_dir" ] || continue
+            find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+            echo "[menu] pbr: services -> network — $pbr_menu_dir"
+        done <<< "$pbr_menu_dirs"
     fi
 
     # WOL (网络唤醒) 移到"网络"菜单
-    local wol_menu_dir
-    wol_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-wol/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
-    if [ -n "$wol_menu_dir" ] && [ -d "$wol_menu_dir" ]; then
-        find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-        echo "[menu] wol: services -> network"
+    local wol_menu_dirs
+    wol_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-wol/root/usr/share/luci/menu.d" 2>/dev/null)
+    if [ -n "$wol_menu_dirs" ]; then
+        while IFS= read -r wol_menu_dir; do
+            [ -n "$wol_menu_dir" ] && [ -d "$wol_menu_dir" ] || continue
+            find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+            echo "[menu] wol: services -> network — $wol_menu_dir"
+        done <<< "$wol_menu_dirs"
     fi
 
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=7)
-    # bandix 可能来自 luci_app_bandix feed, menu.d 深度 7
-    local bandix_menu_dir
-    bandix_menu_dir=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null | head -1)
-    if [ -n "$bandix_menu_dir" ] && [ -d "$bandix_menu_dir" ]; then
-        find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
-            -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
-        # WireGuard 在状态菜单的 order 通常是 4，bandix 设 7 排在它下面
-        local bandix_json
-        bandix_json=$(find "$bandix_menu_dir" -maxdepth 1 -name '*.json' | head -1)
-        if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
-            sed -i 's/"order": 90/"order": 7/' "$bandix_json"
-        fi
-        echo "[menu] bandix: network -> status (order=7)"
+    local bandix_menu_dirs
+    bandix_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null)
+    if [ -n "$bandix_menu_dirs" ]; then
+        while IFS= read -r bandix_menu_dir; do
+            [ -n "$bandix_menu_dir" ] && [ -d "$bandix_menu_dir" ] || continue
+            find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
+                -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
+            # WireGuard 在状态菜单的 order 通常是 4，bandix 设 7 排在它下面
+            local bandix_json
+            bandix_json=$(find "$bandix_menu_dir" -maxdepth 1 -name '*.json' | head -1)
+            if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
+                sed -i 's/"order": 90/"order": 7/' "$bandix_json"
+            fi
+            echo "[menu] bandix: network -> status (order=7) — $bandix_menu_dir"
+        done <<< "$bandix_menu_dirs"
     fi
 }
 
