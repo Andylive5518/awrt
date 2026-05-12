@@ -878,6 +878,20 @@ docker_stack_sync_nftables_compat() {
 
     build_dir=$(_docker_stack_normalize_build_dir "$build_dir")
 
+    # kernel 6.6（ImmortalWrt 24.10）上 iptables-legacy 和 nftables 和平共存，
+    # 官方 dockerd 依赖 kmod-ipt-nat / iptables-mod-extra 全家桶，正常工作。
+    # nftables 迁移方案（替换 DEPENDS + 修改 init 脚本）仅 kernel 6.18+ 需要。
+    local kv
+    kv=$(awk -F'[ .=]' '/^LINUX_KERNEL_HASH/ {next} /^LINUX_VERSION-/{v=$2; if(v<7)v+=3; printf "%d.%d",v,$3; exit}' "$build_dir/include/kernel-version.mk" 2>/dev/null)
+    if [ -n "$kv" ]; then
+        local kmajor=${kv%%.*}
+        local kminor=${kv#*.}
+        if [ "$kmajor" -lt 6 ] || { [ "$kmajor" -eq 6 ] && [ "${kminor:-0}" -lt 12 ]; }; then
+            echo "kernel $kv < 6.12 — 跳过了 nftables 迁移，保留官方 iptables-legacy 依赖"
+            return 0
+        fi
+    fi
+
     dockerd_makefile=$(_docker_stack_resolve_component_makefile "$build_dir" "dockerd") || return 1
     dockerd_config=$(_docker_stack_resolve_dockerd_file "$build_dir" "files/etc/config/dockerd") || return 1
     dockerd_init=$(_docker_stack_resolve_dockerd_file "$build_dir" "files/dockerd.init") || return 1
