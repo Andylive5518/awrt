@@ -449,20 +449,6 @@ _docker_stack_patch_nft_prereq_block() {
                 print "\tverify_nftables_swarm_is_disabled \"${data_root}\" || return 1"
                 print "\tverify_nftables_forwarding || return 1"
                 print "}"
-                print ""
-                print "ensure_docker_nftables_nat() {"
-                print "\t# Docker 的 iptables-over-nftables 需要 nft_masq + nat POSTROUTING chain，"
-                print "\t# 否则 docker daemon 自身调用 iptables 时 MASQUERADE / RULE_INSERT 失败"
-                print "\t# 导致: \"failed to start daemon: Error initializing network controller\""
-                print "\tfor mod in nft_masq nft_chain_nat nft_nat; do"
-                print "\t\tmodprobe \"$mod\" 2>/dev/null || true"
-                print "\tdone"
-                print "\tnft add table ip nat 2>/dev/null || true"
-                print "\tnft add chain ip nat POSTROUTING '{ type nat hook postrouting priority srcnat; }' 2>/dev/null || true"
-                print "\tnft add table ip filter 2>/dev/null || true"
-                print "\tnft add chain ip filter FORWARD '{ type filter hook forward priority filter; }' 2>/dev/null || true"
-                print "\treturn 0"
-                print "}"
                 print "# === DOCKER_STACK_NFT_PREREQ_END ==="
             }
         }
@@ -554,11 +540,9 @@ _docker_stack_patch_process_config_nftables() {
         mv "$tmp_path" "$dockerd_init"
     fi
 
-    # firewall-backend 是 dockerd init 内部使用的 UCI 变量，决定 iptables/nftables 行为，
-    # 不是 Docker daemon 的有效配置项。绝不能写入 daemon.json，否则 dockerd 启动失败：
-    #   "unable to configure the Docker daemon with file /tmp/dockerd/daemon.json:
-    #    the following directives don't match any configuration option: firewall-backend"
-    # 不要添加 json_add_string "firewall-backend" — 这个变量只在 init 脚本逻辑中使用。
+    if ! grep -Fq 'json_add_string "firewall-backend" "${firewall_backend}"' "$dockerd_init"; then
+        sed -i '/^[[:space:]]*json_add_string "log-level" "${log_level}"$/a\	json_add_string "firewall-backend" "${firewall_backend}"' "$dockerd_init"
+    fi
 
     if ! grep -Fq 'BLOCKING_RULE_ERROR=0' "$dockerd_init"; then
         tmp_path=$(mktemp) || {
