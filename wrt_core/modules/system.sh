@@ -505,7 +505,7 @@ update_menu_location() {
         done <<< "$wol_menu_dirs"
     fi
 
-    # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=7)
+    # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
     local bandix_menu_dirs
     bandix_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null)
     if [ -n "$bandix_menu_dirs" ]; then
@@ -513,13 +513,13 @@ update_menu_location() {
             [ -n "$bandix_menu_dir" ] && [ -d "$bandix_menu_dir" ] || continue
             find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
                 -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
-            # WireGuard 在状态菜单的 order 通常是 4，bandix 设 7 排在它下面
+            # WireGuard 在状态菜单的 order 通常是 4，bandix 设 8 排在它下面
             local bandix_json
             bandix_json=$(find "$bandix_menu_dir" -maxdepth 1 -name '*.json' | head -1)
             if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
-                sed -i 's/"order": 90/"order": 7/' "$bandix_json"
+                sed -i 's/"order": 90/"order": 8/' "$bandix_json"
             fi
-            echo "[menu] bandix: network -> status (order=7) — $bandix_menu_dir"
+            echo "[menu] bandix: network -> status (order=8) — $bandix_menu_dir"
         done <<< "$bandix_menu_dirs"
     fi
 }
