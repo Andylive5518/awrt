@@ -5,21 +5,26 @@ remove_unwanted_packages() {
         "luci-app-passwall" "luci-app-ddns-go" "luci-app-rclone" "luci-app-ssr-plus"
         "luci-app-vssr" "luci-app-daed" "luci-app-dae" "luci-app-alist" "luci-app-homeproxy"
         "luci-app-haproxy-tcp" "luci-app-openclash" "luci-app-mihomo" "luci-app-appfilter"
-        "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome"
+        "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome" "luci-app-diskman"
+        "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker" 
+        "luci-app-dockerman" "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
+        "luci-app-autoreboot" "luci-app-microsocks"
     )
     local packages_net=(
-        "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria"
+        "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
         "mosdns" "adguardhome" "ddns-go" "naiveproxy" "shadowsocks-rust"
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
         "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
-        "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite"
+        "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
+        "microsocks" "tuic-server" "shadow-tls"
     )
     local packages_utils=(
-        "cups"
+        "cups" "coremark"
     )
     local small8_packages=(
         "ppp" "firewall" "dae" "daed" "daed-next" "libnftnl" "nftables" "dnsmasq" "luci-app-alist"
-        "alist" "opkg" "smartdns" "luci-app-smartdns" "easytier" "dockerd"
+        "alist" "opkg" "smartdns" "luci-app-smartdns" "easytier" "dockerd" "luci-app-bandix" "openwrt-bandix"
+        "luci-app-passwall" "luci-app-passwall2" "autocore"
     )
 
     for pkg in "${luci_packages[@]}"; do
