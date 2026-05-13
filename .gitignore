@@ -30,4 +30,8 @@ wrt_core/deconfig/test.config
 .env
 .taskmaster/
 .sisyphus/
+.agents/
+.claude/
+.omc/
+skills-lock.json
 AGENTS.md
