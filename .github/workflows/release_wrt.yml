@@ -94,11 +94,16 @@ jobs:
       - name: Setup Swap & Disk Cleanup (Pre-build)
         run: |
           echo "========== Pre-build System Tuning =========="
-          echo "[Swap] 创建 2GB swap 防止 OOM ..."
-          sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          echo "[Swap] 检查已有 swap ..."
+          if swapon --show | grep -q '^/'; then
+            echo "  已有 swap，跳过创建"
+          else
+            echo "  创建 2GB swap 防止 OOM ..."
+            sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+          fi
           echo "Swap 状态:"
           swapon --show
           free -h
