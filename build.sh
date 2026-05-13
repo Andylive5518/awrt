@@ -77,7 +77,7 @@ fi
 
 TARGET_DIR="$BASE_PATH/../$BUILD_DIR/bin/targets"
 if [[ -d $TARGET_DIR ]]; then
-    find "$TARGET_DIR" -type f \( -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*rootfs.tar.gz" -o -name "*.vmdk" -o -name "*.qcow2" \) -exec rm -f {} +
+    find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" \) -exec rm -f {} +
 fi
 
 if [ -n "$BUILD_JOBS" ]; then
@@ -95,7 +95,7 @@ make -j$BUILD_JOBS_VAL V=s
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"
 mkdir -p "$FIRMWARE_DIR"
-find "$TARGET_DIR" -type f \( -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*rootfs.tar.gz" -o -name "*.vmdk" -o -name "*.qcow2" \) -exec cp -f {} "$FIRMWARE_DIR/" \;
+find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" \) -exec cp -f {} "$FIRMWARE_DIR/" \;
 \rm -f "$BASE_PATH/../firmware/Packages.manifest" 2>/dev/null
 
 if [[ -d action_build ]]; then
