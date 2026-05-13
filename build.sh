@@ -80,8 +80,18 @@ if [[ -d $TARGET_DIR ]]; then
     find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*combined.img" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" -o -name "*.vmdk" -o -name "*.vdi" -o -name "*.vhdx" \) -exec rm -f {} +
 fi
 
-make download -j$(($(nproc) * 2))
-make -j$(($(nproc) + 1)) V=s
+# BUILD_JOBS: 默认 $(($(nproc) + 1))，GitHub Actions 环境自动限制为 2
+if [ -n "$BUILD_JOBS" ]; then
+    BUILD_JOBS_VAL="$BUILD_JOBS"
+elif [ -n "$GITHUB_ACTIONS" ]; then
+    BUILD_JOBS_VAL=2
+else
+    BUILD_JOBS_VAL=$(($(nproc) + 1))
+fi
+echo "BUILD_JOBS=$BUILD_JOBS_VAL"
+
+make download -j$BUILD_JOBS_VAL
+make -j$BUILD_JOBS_VAL V=s
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"
