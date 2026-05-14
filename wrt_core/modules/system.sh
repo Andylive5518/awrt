@@ -602,11 +602,12 @@ update_oaf_deconfig() {
         while IFS= read -r appfilter_conf; do
             [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
             sed -i \
+                -e "s/option enable '0'/option enable '1'/g" \
                 -e "s/auto_load_engine '[01]'/auto_load_engine '1'/g" \
                 -e "s/record_enable '1'/record_enable '0'/g" \
                 -e "s/disable_hnat '1'/disable_hnat '0'/g" \
                 "$appfilter_conf"
-            echo "[OAF] x86_64: auto_load_engine=1, record_enable=0, disable_hnat=0 — $appfilter_conf"
+            echo "[OAF] x86_64: enable=1, auto_load_engine=1, record_enable=0, disable_hnat=0 — $appfilter_conf"
         done <<< "$appfilter_confs"
     fi
 
