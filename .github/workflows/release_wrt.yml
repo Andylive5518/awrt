@@ -1,5 +1,5 @@
-name: Release WRT (JD Cloud IPQ60xx)
-run-name: Release - JD Cloud IPQ60xx
+name: Release WRT (JDC IPQ60xx)
+run-name: Release - JDC IPQ60xx
 
 on:
   workflow_dispatch:
