@@ -119,21 +119,55 @@ apply_hash_fixes() {
 
 update_ath11k_fw() {
     local makefile="$BUILD_DIR/package/firmware/ath11k-firmware/Makefile"
-    local new_mk="$BASE_PATH/patches/ath11k_fw.mk"
+    local local_mk="$BASE_PATH/patches/ath11k_fw.mk"
     local url="https://raw.githubusercontent.com/VIKINGYFY/immortalwrt/refs/heads/main/package/firmware/ath11k-firmware/Makefile"
 
-    if [ -d "$(dirname "$makefile")" ]; then
-        echo "正在更新 ath11k-firmware Makefile..."
-        if ! curl -fsSL -o "$new_mk" "$url"; then
-            echo "错误：从 $url 下载 ath11k-firmware Makefile 失败" >&2
-            exit 1
-        fi
-        if [ ! -s "$new_mk" ]; then
-            echo "错误：下载的 ath11k-firmware Makefile 为空文件" >&2
-            exit 1
-        fi
-        mv -f "$new_mk" "$makefile"
+    if [ ! -d "$(dirname "$makefile")" ]; then
+        return 0
     fi
+
+    echo "正在更新 ath11k-firmware Makefile..."
+
+    local tmp_mk
+    tmp_mk=$(mktemp) || { echo "错误：无法创建临时文件" >&2; exit 1; }
+
+    # Download upstream Makefile; fall back to local copy on failure
+    if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url"; then
+        echo "警告：从 $url 下载失败，使用本地 ath11k-firmware Makefile" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：无法从远程下载，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    if [ ! -s "$tmp_mk" ]; then
+        echo "警告：下载的 ath11k-firmware Makefile 为空，使用本地备用文件" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：下载的文件为空，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    # Validate: the downloaded Makefile must have a PKG_MIRROR_HASH line
+    if ! grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
+        echo "警告：下载的 Makefile 缺少 PKG_MIRROR_HASH，使用本地备用文件" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：下载的文件格式无效，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    mv -f "$tmp_mk" "$makefile"
+    rm -f "$tmp_mk"
 }
 
 fix_mkpkg_format_invalid() {
