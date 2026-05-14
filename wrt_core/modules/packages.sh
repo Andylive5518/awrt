@@ -90,7 +90,8 @@ install_small8() {
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd \
-        luci-app-fullconenat luci-app-partexp luci-app-momo nikki luci-app-nikki
+        luci-app-fullconenat luci-app-partexp luci-app-momo nikki luci-app-nikki \
+        luci-app-autoreboot luci-app-diskman luci-app-dockerman luci-app-wechatpush luci-app-zerotier
 }
 
 install_passwall() {
