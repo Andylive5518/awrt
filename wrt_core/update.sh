@@ -52,7 +52,7 @@ main() {
     remove_something_nss_kmod
     update_affinity_script
     update_ath11k_fw
-    fix_mkpkg_format_invalid
+    # fix_mkpkg_format_invalid
     change_cpuusage
     update_tcping
     fix_gettext_full_csharp
