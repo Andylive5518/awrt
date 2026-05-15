@@ -115,6 +115,17 @@ jobs:
           sudo rm -rf /tmp/* 2>/dev/null || true
           sudo rm -rf /var/tmp/* 2>/dev/null || true
           sudo docker system prune -af 2>/dev/null || true
+
+          echo "[Disk] 清理预装工具链（释放空间给 OpenWrt 编译）..."
+          sudo rm -rf /usr/share/dotnet 2>/dev/null || true
+          sudo rm -rf /usr/local/lib/android 2>/dev/null || true
+          sudo rm -rf /opt/ghc 2>/dev/null || true
+          sudo rm -rf /usr/local/.ghcup 2>/dev/null || true
+          sudo rm -rf /usr/local/share/powershell 2>/dev/null || true
+          sudo rm -rf /usr/local/share/chromium 2>/dev/null || true
+          sudo rm -rf /usr/local/lib/node_modules 2>/dev/null || true
+          sudo rm -rf /opt/hostedtoolcache 2>/dev/null || true
+
           df -h /
           echo "=============================================="
 
