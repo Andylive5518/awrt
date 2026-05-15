@@ -865,7 +865,9 @@ config include
 	option path '/usr/share/pbr/pbr.user.${isp_lower}6'
 	option enabled '0'
 PBRCONFEOF
-        sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{/option enabled '0'/r $tmp_rules}" "$pbr_conf"
+        sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
+/option enabled '0'/r $tmp_rules
+}" "$pbr_conf"
         rm -f "$tmp_rules"
     fi
 }
