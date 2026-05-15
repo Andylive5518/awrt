@@ -14,7 +14,6 @@ BASE_PATH=$(cd "$WRT_CORE_PATH" && pwd)
 
 Dev=$1
 
-# 无参数时自动检测唯一的 INI 文件
 if [[ -z $Dev ]]; then
     INI_FILE=$(ls "$BASE_PATH/compilecfg/"*.ini 2>/dev/null | head -1)
     if [[ -z $INI_FILE ]]; then

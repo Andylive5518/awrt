@@ -59,7 +59,6 @@ remove_unwanted_packages() {
         fi
     done
 
-    # 清理旧的 small8 feed 残留
     if [[ -d ./feeds/small8 ]]; then
         \rm -rf ./feeds/small8
     fi
@@ -217,7 +216,7 @@ install_custom_feed() {
     fi
 
     custom_feed_sources=(
-        "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
+        "kenzok8/jell|https://github.com/kenzok8/jell.git||${base_custom_feed_packages[*]}"
         "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns"
         "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
         "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
@@ -545,8 +544,6 @@ update_dockerman() {
 
         local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
         if [ -f "$cfg_lua" ]; then
-            # s:option() 是多行函数调用，不能用 a\ 在匹配行后插入，会拆断括号
-            # 改用 c\ 替换 hub-mirror 整行，不影响上方的多行 s:option() 结构
             sed -i '/hub-mirror\.c\.163\.com/c\
 o:value("https://docker.1ms.run", "https://docker.1ms.run")\
 o:value("https://docker.xuanyuan.me", "https://docker.xuanyuan.me")\

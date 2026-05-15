@@ -47,21 +47,21 @@ main() {
     fix_miniupnpd
     update_golang
     change_dnsmasq2full
-    fix_mk_def_depends
+    # fix_mk_def_depends
     update_default_lan_addr
-    remove_something_nss_kmod
-    update_affinity_script
-    update_ath11k_fw
-    fix_mkpkg_format_invalid
+    # remove_something_nss_kmod
+    # update_affinity_script
+    # update_ath11k_fw
+    # fix_mkpkg_format_invalid
     change_cpuusage
     update_tcping
     fix_gettext_full_csharp
-    add_ax6600_led
+    # add_ax6600_led
     set_custom_task
     apply_passwall_tweaks
-    update_nss_pbuf_performance
+    # update_nss_pbuf_performance
     set_build_signature
-    update_nss_diag
+    # update_nss_diag
     update_menu_location
     fix_compile_coremark
     update_dnsmasq_conf
@@ -97,7 +97,7 @@ main() {
     fix_openssl_ktls
     fix_opkg_check
     fix_netfilter_kmod_clash
-    fix_quectel_cm
+    # fix_quectel_cm
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
