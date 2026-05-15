@@ -5,7 +5,7 @@ fix_cups_libcups_avahi_depends() {
     
     # Check if file exists
     if [ ! -f "$makefile_path" ]; then
-        echo "cups: libcups Makefile not found, skip: $makefile_path"
+        echo "错误：cups libcups Makefile 不存在: $makefile_path" >&2
         return 0
     fi
     

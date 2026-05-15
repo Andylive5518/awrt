@@ -63,7 +63,7 @@ remove_uhttpd_dependency
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
 
-# 确保 dockerd 不被 defconfig 清除（small8 feed 索引残留导致 defconfig 误删）
+# 确保 dockerd 不被 defconfig 清除（旧 feed 索引残留可能导致 defconfig 误删）
 if ! grep -q "^CONFIG_PACKAGE_dockerd=y$" "$BASE_PATH/../$BUILD_DIR/.config" 2>/dev/null; then
     if [ -f "$BASE_PATH/../$BUILD_DIR/feeds/packages/utils/dockerd/Makefile" ]; then
         echo "CONFIG_PACKAGE_dockerd=y" >> "$BASE_PATH/../$BUILD_DIR/.config"

@@ -22,7 +22,7 @@ remove_unwanted_packages() {
         "luci-app-vssr" "luci-app-daed" "luci-app-dae" "luci-app-alist" "luci-app-homeproxy"
         "luci-app-haproxy-tcp" "luci-app-openclash" "luci-app-mihomo" "luci-app-appfilter"
         "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome" "luci-app-diskman"
-        "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker" 
+        "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker"
         "luci-app-dockerman" "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
         "luci-app-autoreboot" "luci-app-microsocks"
     )
@@ -37,9 +37,6 @@ remove_unwanted_packages() {
     local packages_utils=(
         "cups" "coremark"
     )
-
-    # small8_packages 不再需要，因为不再完整克隆 small8 feed
-    # custom_feed 只下载需要的包，不会残留无用文件
 
     for pkg in "${luci_packages[@]}"; do
         if [[ -d ./feeds/luci/applications/$pkg ]]; then
@@ -65,6 +62,9 @@ remove_unwanted_packages() {
     # 清理旧的 small8 feed 残留
     if [[ -d ./feeds/small8 ]]; then
         \rm -rf ./feeds/small8
+    fi
+    if [[ -d ./package/feeds/small8 ]]; then
+        \rm -rf ./package/feeds/small8
     fi
 
     if [[ -d ./package/istore ]]; then
@@ -134,8 +134,17 @@ sync_sparse_packages_to_feed_dir() {
         return 1
     fi
 
+    if ! git -C "$tmp_dir" checkout; then
+        echo "错误：$repo_label 工作树检出失败" >&2
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
     for pkg in "${packages[@]}"; do
         if [ -d "$tmp_dir/$pkg" ]; then
+            if [ -d "$target_dir/$pkg" ]; then
+                echo "注意：$pkg 已存在，将被 $repo_label 覆盖"
+            fi
             rm -rf "$target_dir/$pkg"
             mv "$tmp_dir/$pkg" "$target_dir/"
         else
@@ -182,7 +191,8 @@ install_custom_feed() {
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd \
-        luci-app-fullconenat luci-app-partexp luci-app-momo nikki luci-app-nikki
+        luci-app-fullconenat luci-app-partexp luci-app-momo nikki luci-app-nikki \
+        luci-app-zerotier luci-app-wechatpush luci-app-autoreboot
     )
     local required_feed_dirs=(
         cups tcping v2ray-geodata luci-lib-taskd luci-app-openclash
@@ -369,7 +379,7 @@ update_lucky() {
         if ! git clone --depth 1 --filter=blob:none --no-checkout "$lucky_repo_url" "$tmp_dir"; then
             echo "错误：从 $lucky_repo_url 克隆仓库失败" >&2
             rm -rf "$tmp_dir"
-            return 0
+            return 1
         fi
 
         pushd "$tmp_dir" >/dev/null
@@ -378,7 +388,7 @@ update_lucky() {
             echo "错误：稀疏检出 luci-app-lucky 或 lucky 失败" >&2
             popd >/dev/null
             rm -rf "$tmp_dir"
-            return 0
+            return 1
         }
         git checkout --quiet
 
@@ -604,6 +614,7 @@ remove_attendedsysupgrade() {
 update_package() {
     local dir=$(find "$BUILD_DIR/package" \( -type d -o -type l \) -name "$1")
     if [ -z "$dir" ]; then
+        echo "Warning: 未找到包目录 $1，跳过更新。" >&2
         return 0
     fi
     local branch="$2"
