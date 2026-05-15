@@ -41,6 +41,7 @@ main() {
     update_feeds
     remove_unwanted_packages
     remove_tweaked_packages
+    install_custom_feed
     update_homeproxy
     fix_default_set
     fix_miniupnpd
@@ -55,7 +56,6 @@ main() {
     change_cpuusage
     update_tcping
     fix_gettext_full_csharp
-    update_util_linux
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks
@@ -87,6 +87,7 @@ main() {
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
+    verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_cups_libcups_avahi_depends
     fix_easytier_lua
@@ -102,7 +103,7 @@ main() {
     install_pbr_cucc
     enable_ttyd_autologin
     fix_nikki_gobinpackage
-    fix_tuic_x86_downgrade
+    fix_tuic_downgrade
     fix_pbr_ip_forward
     # apply_hash_fixes
 }

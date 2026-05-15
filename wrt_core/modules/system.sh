@@ -119,41 +119,78 @@ apply_hash_fixes() {
 
 update_ath11k_fw() {
     local makefile="$BUILD_DIR/package/firmware/ath11k-firmware/Makefile"
-    local new_mk="$BASE_PATH/patches/ath11k_fw.mk"
+    local local_mk="$BASE_PATH/patches/ath11k_fw.mk"
     local url="https://raw.githubusercontent.com/VIKINGYFY/immortalwrt/refs/heads/main/package/firmware/ath11k-firmware/Makefile"
 
-    if [ -d "$(dirname "$makefile")" ]; then
-        echo "正在更新 ath11k-firmware Makefile..."
-        if ! curl -fsSL -o "$new_mk" "$url"; then
-            echo "错误：从 $url 下载 ath11k-firmware Makefile 失败" >&2
-            exit 1
-        fi
-        if [ ! -s "$new_mk" ]; then
-            echo "错误：下载的 ath11k-firmware Makefile 为空文件" >&2
-            exit 1
-        fi
-        mv -f "$new_mk" "$makefile"
+    if [ ! -d "$(dirname "$makefile")" ]; then
+        return 0
     fi
+
+    echo "正在更新 ath11k-firmware Makefile..."
+
+    local tmp_mk
+    tmp_mk=$(mktemp) || { echo "错误：无法创建临时文件" >&2; exit 1; }
+
+    # Download upstream Makefile; fall back to local copy on failure
+    if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url"; then
+        echo "警告：从 $url 下载失败，使用本地 ath11k-firmware Makefile" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：无法从远程下载，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    if [ ! -s "$tmp_mk" ]; then
+        echo "警告：下载的 ath11k-firmware Makefile 为空，使用本地备用文件" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：下载的文件为空，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    # Validate: the downloaded Makefile must have a PKG_MIRROR_HASH line
+    if ! grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
+        echo "警告：下载的 Makefile 缺少 PKG_MIRROR_HASH，使用本地备用文件" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：下载的文件格式无效，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    mv -f "$tmp_mk" "$makefile"
+    rm -f "$tmp_mk"
 }
 
 fix_mkpkg_format_invalid() {
+    local custom_feed_worktree_dir
+    custom_feed_worktree_dir=$(get_custom_feed_worktree_dir)
+
     if [[ $BUILD_DIR =~ "imm-nss" ]]; then
-        if [ -f $BUILD_DIR/feeds/small8/v2ray-geodata/Makefile ]; then
-            sed -i 's/VER)-\$(PKG_RELEASE)/VER)-r\$(PKG_RELEASE)/g' $BUILD_DIR/feeds/small8/v2ray-geodata/Makefile
+        if [ -f "$custom_feed_worktree_dir/v2ray-geodata/Makefile" ]; then
+            sed -i 's/VER)-\$(PKG_RELEASE)/VER)-r\$(PKG_RELEASE)/g' "$custom_feed_worktree_dir/v2ray-geodata/Makefile"
         fi
-        if [ -f $BUILD_DIR/feeds/small8/luci-lib-taskd/Makefile ]; then
-            sed -i 's/>=1\.0\.3-1/>=1\.0\.3-r1/g' $BUILD_DIR/feeds/small8/luci-lib-taskd/Makefile
+        if [ -f "$custom_feed_worktree_dir/luci-lib-taskd/Makefile" ]; then
+            sed -i 's/>=1\.0\.3-1/>=1\.0\.3-r1/g' "$custom_feed_worktree_dir/luci-lib-taskd/Makefile"
         fi
-        if [ -f $BUILD_DIR/feeds/small8/luci-app-openclash/Makefile ]; then
-            sed -i 's/PKG_RELEASE:=beta/PKG_RELEASE:=1/g' $BUILD_DIR/feeds/small8/luci-app-openclash/Makefile
+        if [ -f "$custom_feed_worktree_dir/luci-app-openclash/Makefile" ]; then
+            sed -i 's/PKG_RELEASE:=beta/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-openclash/Makefile"
         fi
-        if [ -f $BUILD_DIR/feeds/small8/luci-app-quickstart/Makefile ]; then
-            sed -i 's/PKG_VERSION:=0\.8\.16-1/PKG_VERSION:=0\.8\.16/g' $BUILD_DIR/feeds/small8/luci-app-quickstart/Makefile
-            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' $BUILD_DIR/feeds/small8/luci-app-quickstart/Makefile
+        if [ -f "$custom_feed_worktree_dir/luci-app-quickstart/Makefile" ]; then
+            sed -i 's/PKG_VERSION:=0\.8\.16-1/PKG_VERSION:=0\.8\.16/g' "$custom_feed_worktree_dir/luci-app-quickstart/Makefile"
+            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-quickstart/Makefile"
         fi
-        if [ -f $BUILD_DIR/feeds/small8/luci-app-store/Makefile ]; then
-            sed -i 's/PKG_VERSION:=0\.1\.27-1/PKG_VERSION:=0\.1\.27/g' $BUILD_DIR/feeds/small8/luci-app-store/Makefile
-            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' $BUILD_DIR/feeds/small8/luci-app-store/Makefile
+        if [ -f "$custom_feed_worktree_dir/luci-app-store/Makefile" ]; then
+            sed -i 's/PKG_VERSION:=0\.1\.27-1/PKG_VERSION:=0\.1\.27/g' "$custom_feed_worktree_dir/luci-app-store/Makefile"
+            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-store/Makefile"
         fi
     fi
 }
@@ -182,7 +219,7 @@ change_cpuusage() {
 }
 
 update_tcping() {
-    local tcping_path="$BUILD_DIR/feeds/small8/tcping/Makefile"
+    local tcping_path="$(get_custom_feed_worktree_dir)/tcping/Makefile"
     local url="https://raw.githubusercontent.com/Openwrt-Passwall/openwrt-passwall-packages/refs/heads/main/tcping/Makefile"
 
     if [ -d "$(dirname "$tcping_path")" ]; then
@@ -331,12 +368,12 @@ EOF
 }
 
 apply_passwall_tweaks() {
-    local chnlist_path="$BUILD_DIR/feeds/passwall/luci-app-passwall/root/usr/share/passwall/rules/chnlist"
+    local chnlist_path="$(get_custom_feed_worktree_dir)/luci-app-passwall/root/usr/share/passwall/rules/chnlist"
     if [ -f "$chnlist_path" ]; then
         >"$chnlist_path"
     fi
 
-    local xray_util_path="$BUILD_DIR/feeds/passwall/luci-app-passwall/luasrc/passwall/util_xray.lua"
+    local xray_util_path="$(get_custom_feed_worktree_dir)/luci-app-passwall/luasrc/passwall/util_xray.lua"
     if [ -f "$xray_util_path" ]; then
         sed -i 's/maxRTT = "1s"/maxRTT = "2s"/g' "$xray_util_path"
         sed -i 's/sampling = 3/sampling = 5/g' "$xray_util_path"
@@ -351,18 +388,21 @@ install_opkg_distfeeds() {
     local version_number
     # VERSION_NUMBER 有两行：第1行是 $(call qstrip,...) 模板，第2行 $(if ...,fallback)
     # 需要取 fallback 值（如 24.10.6），不是模板
-    version_number=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
+    # ipq60xx 用 SNAPSHOT：24.10.6 → 24.10-SNAPSHOT，25.12.0-rc1 → 25.12-SNAPSHOT
+    local raw_version
+    raw_version=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
+    version_number=$(echo "$raw_version" | sed 's/^\([0-9]*\.[0-9]*\).*/\1-SNAPSHOT/')
 
-    local arch="x86_64"
+    local arch="aarch64_cortex-a53"
 
     if [ -d "$emortal_def_dir" ]; then
         # 始终覆盖 distfeeds.conf，确保 URL 最新
         cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/base/
-src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/luci/
-src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/packages/
-src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/routing/
-src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/${arch}/telephony/
+src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/base/
+src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/luci/
+src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/packages/
+src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/routing/
+src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/telephony/
 EOF
 
         # 仅在首次注入 install 规则和 uci-defaults mv 命令
@@ -376,18 +416,16 @@ EOF
 sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
         fi
 
-        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, USTC)"
+        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, raw: ${raw_version})"
     fi
 
     # 修复 ImmortalWrt build system 生成的 distfeeds 模板中未展开的变量
-    # ImmortalWrt 的 distfeeds.conf 是由 build system 动态生成的，
-    # 模板里 $(call qstrip,$(CONFIG_VERSION_NUMBER)) 在某些构建路径下不会被展开
     # find 范围覆盖 package/ include/ scripts/ feeds/ — 模板可能在 feeds 中
     if [ -n "$version_number" ]; then
         local fixed=0
         while IFS= read -r -d '' f; do
             sed -i "s|\\$(call.q*strip,\\$(CONFIG_VERSION_NUMBER))|${version_number}|g" "$f"
-            sed -i "s|mirrors.vsean.net/openwrt|mirrors.ustc.edu.cn/immortalwrt|g" "$f"
+            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
             fixed=1
         done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
             -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
@@ -402,8 +440,8 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/
     # 该文件没有扩展名，上面的 find *.conf|*.mk|*.sh 匹配不到
     local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
     if [ -f "$chn_settings" ]; then
-        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://mirrors.ustc.edu.cn/immortalwrt|g' "$chn_settings"
-        echo "[mirror] 99-default-settings-chinese 镜像已改为 USTC"
+        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://downloads.immortalwrt.org|g' "$chn_settings"
+        echo "[mirror] 99-default-settings-chinese 镜像已改为官方"
     fi
 }
 
@@ -436,7 +474,7 @@ update_menu_location() {
         sed -i 's/nas/services/g' "$samba4_path"
     fi
 
-    local tailscale_path="$BUILD_DIR/feeds/small8/luci-app-tailscale/root/usr/share/luci/menu.d/luci-app-tailscale.json"
+    local tailscale_path="$(get_custom_feed_worktree_dir)/luci-app-tailscale/root/usr/share/luci/menu.d/luci-app-tailscale.json"
     if [ -d "$(dirname "$tailscale_path")" ] && [ -f "$tailscale_path" ]; then
         sed -i 's/services/vpn/g' "$tailscale_path"
     fi
@@ -561,14 +599,14 @@ update_script_priority() {
         sed -i 's/START=.*/START=89/g' "$pbuf_path"
     fi
 
-    local mosdns_path="$BUILD_DIR/package/feeds/small8/luci-app-mosdns/root/etc/init.d/mosdns"
+    local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
     if [ -d "${mosdns_path%/*}" ] && [ -f "$mosdns_path" ]; then
         sed -i 's/START=.*/START=94/g' "$mosdns_path"
     fi
 }
 
 update_mosdns_deconfig() {
-    local mosdns_conf="$BUILD_DIR/feeds/small8/luci-app-mosdns/root/etc/config/mosdns"
+    local mosdns_conf="$(get_custom_feed_worktree_dir)/luci-app-mosdns/root/etc/config/mosdns"
     if [ -d "${mosdns_conf%/*}" ] && [ -f "$mosdns_conf" ]; then
         sed -i 's/8000/300/g' "$mosdns_conf"
         sed -i 's/5335/5336/g' "$mosdns_conf"
@@ -576,7 +614,7 @@ update_mosdns_deconfig() {
 }
 
 fix_quickstart() {
-    local file_path="$BUILD_DIR/feeds/small8/luci-app-quickstart/luasrc/controller/istore_backend.lua"
+    local file_path="$(get_custom_feed_worktree_dir)/luci-app-quickstart/luasrc/controller/istore_backend.lua"
     local url="https://gist.githubusercontent.com/puteulanus/1c180fae6bccd25e57eb6d30b7aa28aa/raw/istore_backend.lua"
     if [ -f "$file_path" ]; then
         echo "正在修复 quickstart..."
@@ -588,7 +626,7 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    # open-app-filter 可能来自多个 feed（small8 或 packages），用 find 定位
+    # open-app-filter 可能来自多个 feed（custom_feed 或 packages），用 find 定位
     # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
     local appfilter_confs
     appfilter_confs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
@@ -598,30 +636,32 @@ update_oaf_deconfig() {
     disable_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
     # 修改 appfilter.config（所有 feed 副本）
+    # ipq60xx: auto_load_engine=0（ARM 内核模块兼容性问题）
     if [ -n "$appfilter_confs" ]; then
         while IFS= read -r appfilter_conf; do
             [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
             sed -i \
-                -e "s/option enable '0'/option enable '1'/g" \
-                -e "s/auto_load_engine '[01]'/auto_load_engine '1'/g" \
                 -e "s/record_enable '1'/record_enable '0'/g" \
                 -e "s/disable_hnat '1'/disable_hnat '0'/g" \
+                -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" \
                 "$appfilter_conf"
-            echo "[OAF] x86_64: enable=1, auto_load_engine=1, record_enable=0, disable_hnat=0 — $appfilter_conf"
+            echo "[OAF] ipq60xx: auto_load_engine=0, record_enable=0, disable_hnat=0 — $appfilter_conf"
         done <<< "$appfilter_confs"
     fi
 
     # 修改 94_feature_3.0（所有 feed 副本）
+    # ipq60xx: 同时删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
     if [ -n "$uci_defs" ]; then
         while IFS= read -r uci_def; do
             [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
-            # disable_hnat 可能在旧版中存在，新版本可能已移除；幂等删除
-            if grep -q 'disable_hnat' "$uci_def" 2>/dev/null; then
-                sed -i '/disable_hnat/d' "$uci_def"
-                echo "[OAF] uci_def: removed disable_hnat — $uci_def"
-            else
-                echo "[OAF] uci_def: disable_hnat not present (already clean) — $uci_def"
+            local cleaned=0
+            if grep -q 'disable_hnat\|auto_load_engine' "$uci_def" 2>/dev/null; then
+                sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
+                cleaned=1
             fi
+            [ "$cleaned" = "1" ] \
+                && echo "[OAF] uci_def: removed disable_hnat + auto_load_engine — $uci_def" \
+                || echo "[OAF] uci_def: already clean — $uci_def"
         done <<< "$uci_defs"
     fi
 
@@ -644,7 +684,7 @@ EOF
 }
 
 update_geoip() {
-    local geodata_path="$BUILD_DIR/package/feeds/small8/v2ray-geodata/Makefile"
+    local geodata_path="$(get_custom_feed_package_dir)/v2ray-geodata/Makefile"
     if [ -d "${geodata_path%/*}" ] && [ -f "$geodata_path" ]; then
         local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' $geodata_path | grep -oE "[0-9]{1,}")
         if [ -n "$GEOIP_VER" ]; then
@@ -676,14 +716,14 @@ fix_rust_compile_error() {
 }
 
 fix_easytier_lua() {
-    local file_path="$BUILD_DIR/package/feeds/small8/luci-app-easytier/luasrc/model/cbi/easytier.lua"
+    local file_path="$(get_custom_feed_package_dir)/luci-app-easytier/luasrc/model/cbi/easytier.lua"
     if [ -f "$file_path" ]; then
         sed -i 's/util.pcdata/xml.pcdata/g' "$file_path"
     fi
 }
 
 fix_easytier_mk() {
-    local mk_path="$BUILD_DIR/feeds/small8/luci-app-easytier/easytier/Makefile"
+    local mk_path="$(get_custom_feed_worktree_dir)/luci-app-easytier/easytier/Makefile"
     if [ -f "$mk_path" ]; then
         sed -i 's/!@(mips||mipsel)/!TARGET_mips \&\& !TARGET_mipsel/g' "$mk_path"
     fi
@@ -723,71 +763,62 @@ fix_opkg_check() {
 }
 
 fix_netfilter_kmod_clash() {
-    local include_netfilter_mk="$BUILD_DIR/include/netfilter.mk"
-    local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
+    # OpenWrt issue #22992: kmod-nf-ipt and kmod-iptables both ship
+    # ip_tables.ko / x_tables.ko on kernel 6.18+, causing file clash.
+    #
+    # Upstream fix (dqsq2e2): keep kmod-iptables as the owner of those
+    # .ko files, and filter them out of kmod-nf-ipt's FILES/AUTOLOAD.
+    # DEPENDS must remain +!LINUX_6_12:kmod-iptables so that kmod-nf-ipt
+    # depends on kmod-iptables (which enables CONFIG_IP_NF_IPTABLES_LEGACY
+    # in the kernel, actually building ip_tables.ko).
+    #
+    # Previous AWRT workaround changed DEPENDS to exclude LINUX_6_18 as
+    # well — this prevented the file clash but also prevented ip_tables.ko
+    # from being built at all, causing "module ip_tables.ko missing" errors.
 
-    if [ ! -f "$include_netfilter_mk" ]; then
-        echo "Netfilter include file not found: $include_netfilter_mk" >&2
-        return 1
-    fi
+    local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
 
     if [ ! -f "$netfilter_mk" ]; then
         echo "Netfilter makefile not found: $netfilter_mk" >&2
         return 1
     fi
 
-    if grep -q 'CONFIG_IP_NF_IPTABLES_LEGACY, $(P_V4)ip_tables, ge 6.12' "$include_netfilter_mk" && \
-       grep -q 'CONFIG_IP6_NF_IPTABLES_LEGACY, $(P_V6)ip6_tables, ge 6.12' "$include_netfilter_mk" && \
-       grep -q 'DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables' "$netfilter_mk"; then
-        echo "Netfilter kmod clash workaround already applied"
-        return 0
-    fi
-
-    if grep -q '$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT,CONFIG_IP_NF_IPTABLES, $(P_V4)ip_tables),))' "$include_netfilter_mk"; then
-        echo "Updating NF_IPT mapping for Linux 6.12/6.18..."
-        sed -i 's@$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT,CONFIG_IP_NF_IPTABLES, $(P_V4)ip_tables),))@$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT,CONFIG_IP_NF_IPTABLES, $(P_V4)ip_tables, lt 6.12),))@' "$include_netfilter_mk"
-        sed -i '/CONFIG_IP_NF_IPTABLES, $(P_V4)ip_tables, lt 6\.12)/a$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT,CONFIG_IP_NF_IPTABLES_LEGACY, $(P_V4)ip_tables, ge 6.12),))' "$include_netfilter_mk"
-    fi
-
-    if grep -q '$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_CORE,CONFIG_IP_NF_IPTABLES, xt_standard ipt_icmp xt_tcp xt_udp xt_comment xt_set xt_SET)))' "$include_netfilter_mk"; then
-        echo "Updating IPT_CORE userland mapping for Linux 6.12/6.18..."
-        sed -i 's@$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_CORE,CONFIG_IP_NF_IPTABLES, xt_standard ipt_icmp xt_tcp xt_udp xt_comment xt_set xt_SET)))@$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_CORE,CONFIG_IP_NF_IPTABLES, xt_standard ipt_icmp xt_tcp xt_udp xt_comment xt_set xt_SET, lt 6.12)))@' "$include_netfilter_mk"
-        sed -i '/CONFIG_IP_NF_IPTABLES, xt_standard ipt_icmp xt_tcp xt_udp xt_comment xt_set xt_SET, lt 6\.12))/a$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_CORE,CONFIG_IP_NF_IPTABLES_LEGACY, xt_standard ipt_icmp xt_tcp xt_udp xt_comment xt_set xt_SET, ge 6.12)))' "$include_netfilter_mk"
-    fi
-
-    if grep -q '$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT6,CONFIG_IP6_NF_IPTABLES, $(P_V6)ip6_tables),))' "$include_netfilter_mk"; then
-        echo "Updating NF_IPT6 mapping for Linux 6.12/6.18..."
-        sed -i 's@$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT6,CONFIG_IP6_NF_IPTABLES, $(P_V6)ip6_tables),))@$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT6,CONFIG_IP6_NF_IPTABLES, $(P_V6)ip6_tables, lt 6.12),))@' "$include_netfilter_mk"
-        sed -i '/CONFIG_IP6_NF_IPTABLES, $(P_V6)ip6_tables, lt 6\.12)/a$(eval $(if $(NF_KMOD),$(call nf_add,NF_IPT6,CONFIG_IP6_NF_IPTABLES_LEGACY, $(P_V6)ip6_tables, ge 6.12),))' "$include_netfilter_mk"
-    fi
-
-    if grep -q '$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_IPV6,CONFIG_IP6_NF_IPTABLES, ip6t_icmp6)))' "$include_netfilter_mk"; then
-        echo "Updating IPT_IPV6 userland mapping for Linux 6.12/6.18..."
-        sed -i 's@$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_IPV6,CONFIG_IP6_NF_IPTABLES, ip6t_icmp6)))@$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_IPV6,CONFIG_IP6_NF_IPTABLES, ip6t_icmp6, lt 6.12)))@' "$include_netfilter_mk"
-        sed -i '/CONFIG_IP6_NF_IPTABLES, ip6t_icmp6, lt 6\.12))/a$(eval $(if $(NF_KMOD),,$(call nf_add,IPT_IPV6,CONFIG_IP6_NF_IPTABLES_LEGACY, ip6t_icmp6, ge 6.12)))' "$include_netfilter_mk"
-    fi
-
-    if grep -q 'DEPENDS:=+!LINUX_6_12:kmod-iptables' "$netfilter_mk"; then
-        echo "Applying netfilter kmod clash workaround for Linux 6.12/6.18..."
-        sed -i 's/DEPENDS:=+!LINUX_6_12:kmod-iptables/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/' "$netfilter_mk"
-        return 0
-    fi
-
-    if grep -q 'DEPENDS:=+(!LINUX_6_12&&!LINUX_6_18):kmod-iptables' "$netfilter_mk"; then
-        echo "Normalizing netfilter kmod clash workaround expression..."
-        sed -i 's/DEPENDS:=+(!LINUX_6_12\&\&!LINUX_6_18):kmod-iptables/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/' "$netfilter_mk"
-        return 0
-    fi
-
-    # kernel 6.6 (openwrt-24.10) 不存在 kmod-iptables 版本门控，
-    # iptables/nf_tables 共存无冲突，无需 workaround
+    # kernel 6.6 (openwrt-24.10) — no kmod-iptables version gate at all,
+    # iptables/nf_tables coexist without conflict, nothing to do
     if ! grep -q 'kmod-iptables' "$netfilter_mk"; then
         echo "Netfilter kmod clash workaround not applicable (no kmod-iptables gate found)"
         return 0
     fi
 
-    echo "Netfilter kmod clash workaround target not found in $netfilter_mk" >&2
-    return 1
+    # Idempotent guard: filter-out already applied
+    if grep -q 'filter-out ipv4/netfilter/ip_tables netfilter/x_tables' "$netfilter_mk"; then
+        echo "Netfilter kmod filter-out workaround already applied"
+        return 0
+    fi
+
+    # Step 1: Revert any stale AWRT-style DEPENDS mangling back to upstream
+    # Old AWRT: +(!(LINUX_6_12||LINUX_6_18)):kmod-iptables — BROKEN on 6.18
+    # Upstream: +!LINUX_6_12:kmod-iptables — correct; kmod-iptables owns ip_tables.ko
+    local depends_line
+    depends_line=$(grep 'DEPENDS:=+.*:kmod-iptables' "$netfilter_mk" | head -1)
+    if echo "$depends_line" | grep -q '(LINUX_6_12.*LINUX_6_18)'; then
+        echo "Reverting AWRT netfilter DEPENDS to upstream form..."
+        sed -i '/^define KernelPackage\/nf-ipt$/,/^endef$/{
+            s/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/DEPENDS:=+!LINUX_6_12:kmod-iptables/
+            s/DEPENDS:=+(!LINUX_6_12&&!LINUX_6_18):kmod-iptables/DEPENDS:=+!LINUX_6_12:kmod-iptables/
+        }' "$netfilter_mk"
+    fi
+
+    # Step 2: Apply filter-out to FILES and AUTOLOAD inside KernelPackage/nf-ipt
+    # Removes ip_tables.ko / x_tables.ko from kmod-nf-ipt so kmod-iptables
+    # is the sole owner — no file clash at opkg install time.
+    echo "Applying netfilter kmod filter-out workaround (upstream openwrt#22992)..."
+    sed -i '/^define KernelPackage\/nf-ipt$/,/^endef$/{
+        s|FILES:=\$(foreach mod,\$(NF_IPT-m),\$(LINUX_DIR)/net/\$(mod)\.ko)|FILES:=\$(foreach mod,\$(filter-out ipv4/netfilter/ip_tables netfilter/x_tables,\$(NF_IPT-m)),\$(LINUX_DIR)/net/\$(mod).ko)|
+        s|AUTOLOAD:=\$(call AutoProbe,\$(notdir \$(NF_IPT-m)))|AUTOLOAD:=\$(call AutoProbe,\$(notdir \$(filter-out ipv4/netfilter/ip_tables netfilter/x_tables,\$(NF_IPT-m))))|
+    }' "$netfilter_mk"
+
+    return 0
 }
 
 install_pbr_cmcc() {
@@ -1052,23 +1083,6 @@ enable_ttyd_autologin() {
 }
 
 fix_nikki_gobinpackage() {
-    # nikki 上游 Makefile 使用 GoBinPackage，但 Build/Compile 是空的，
-    # 导致 install_src 失败：找不到 .go_work/build/src/github.com/metacubex/mihomo
-    #
-    # 正确思路：nikki 本身不该编译 mihomo，只作为配置/UI 包。
-    # mihomo 二进制由 small8/mihomo（GoBinPackage，自带完整源码）提供。
-    # nikki 的 +mihomo 依赖通过 small8/mihomo 的 PROVIDES:=mihomo 满足。
-    #
-    # 修复方法：
-    # 1. GoBinPackage -> GoPackage，在空的 Build/Compile 中添加 GoPackage/Compile
-    # 2. 在 $(eval ...) 之前追加空的 Build/InstallDev，覆盖 golang-package.mk 的全局挂载
-    #
-    # 注意：Build/InstallDev 不在 nikki Makefile 里定义——它由 golang-package.mk
-    # 第 301 行全局挂载（ifneq ($(strip $(GO_PKG)),) ... Build/InstallDev=...），
-    # 所以不能通过在 nikki 文件内匹配 Build/InstallDev 来修复，
-    # 必须在 golang-package.mk include 之后追加空的 define Build/InstallDev/enef 来覆盖。
-    # 通用路径查找：nikki 可能来自 nikki 官方 feed (feeds/nikki/nikki/)
-    # 或 small8 feed (feeds/small8/nikki/)，取决于 feeds.conf 配置
     local nikki_makefile
     nikki_makefile=$(find "$BUILD_DIR/feeds" -maxdepth 4 -path '*/nikki/Makefile' -type f 2>/dev/null | head -1)
     if [ -n "$nikki_makefile" ] && [ -f "$nikki_makefile" ]; then
@@ -1120,28 +1134,36 @@ fix_nikki_gobinpackage() {
     fi
 }
 
+fix_tuic_downgrade() {
+    # ImmortalWrt 24.10 使用 Rust 1.90 stable，main 分支自编译 Rust 1.94。
+    # tuic-client v1.8.0+ 使用 if-let guard（稳定于 Rust 1.95），均无法编译。
+    # v1.7.2 不含此特性，可正常编译。此处将版本回退到 1.7.2。
+    # small8 feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
+    # 适用：x86_64 (24.10/Rust 1.90) + ipq60xx ARM64 (main/Rust 1.94)
+    local tuic_mk
+    tuic_mk=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -path '*/small8/tuic-client/Makefile' 2>/dev/null | head -1)
+    [ -n "$tuic_mk" ] && [ -f "$tuic_mk" ] || return 0
+
+    local current_ver
+    current_ver=$(grep -oP '^PKG_VERSION:=\K[0-9.]+' "$tuic_mk" 2>/dev/null)
+
+    case "$current_ver" in
+        1.8.[01])
+            sed -i "s/PKG_VERSION:=${current_ver}/PKG_VERSION:=1.7.2/" "$tuic_mk"
+            echo "[tuic-client] downgraded v${current_ver} → v1.7.2 (if-let guard needs Rust ≥1.95)"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
 fix_bandix_default_enabled() {
-    # openwrt-bandix 可能来自多个 feed（small8 或 openwrt_bandix），用 find 定位
+    # openwrt-bandix 可能来自多个 feed（custom_feed 或 openwrt_bandix），用 find 定位
     local bandix_config
     bandix_config=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -type f -path '*/openwrt-bandix/files/bandix.config' 2>/dev/null | head -1)
     if [ -n "$bandix_config" ] && [ -f "$bandix_config" ]; then
         sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
         echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
-    fi
-}
-
-fix_tuic_x86_downgrade() {
-    # x86_64 使用 ImmortalWrt 24.10.6 (非最新版)，Rust 版本为 1.90 stable。
-    # small8 feed 的 tuic-client v1.8.0 在 release notes 中明确写了：
-    #   "Replaced manual match guards with Rust 1.95.0 if-let guards"
-    # v1.8.1 同样包含此特性（仅修复了日志双前缀 bug）。
-    # 因此 v1.8.0 和 v1.8.1 都需要 Rust >= 1.92 (nightly) / >= 1.95 (stable)。
-    # v1.7.2 不包含 if-let guard，可正常编译。此处将版本号回退到 1.7.2。
-    local tuic_mk="$BUILD_DIR/feeds/small8/tuic-client/Makefile"
-    [ -f "$tuic_mk" ] || return 0
-
-    if grep -q "PKG_VERSION:=1.8.1" "$tuic_mk"; then
-        sed -i 's/PKG_VERSION:=1.8.1/PKG_VERSION:=1.7.2/' "$tuic_mk"
-        echo "[tuic-client] x86_64: downgraded v1.8.1 → v1.7.2 (v1.8.0 also has if-let guard, Rust 1.90)"
     fi
 }
