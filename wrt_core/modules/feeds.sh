@@ -26,6 +26,8 @@ update_feeds() {
     sed -i '/packages_ext/d' "$FEEDS_PATH"
     sed -i '/[[:space:]]small8[[:space:]]/d' "$FEEDS_PATH"
     sed -i '/[[:space:]]custom_feed[[:space:]]/d' "$FEEDS_PATH"
+    sed -i '/[[:space:]]passwall[[:space:]]/d' "$FEEDS_PATH"
+    sed -i '/[[:space:]]nikki[[:space:]]/d' "$FEEDS_PATH"
 
     append_feed_if_missing "$FEEDS_PATH" "openwrt-passwall2" "src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2;main"
     append_feed_if_missing "$FEEDS_PATH" "openwrt_bandix" "src-git openwrt_bandix https://github.com/timsaya/openwrt-bandix.git;main"

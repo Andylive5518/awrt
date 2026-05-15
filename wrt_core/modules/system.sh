@@ -123,6 +123,7 @@ update_ath11k_fw() {
     local url="https://raw.githubusercontent.com/VIKINGYFY/immortalwrt/refs/heads/main/package/firmware/ath11k-firmware/Makefile"
 
     if [ ! -d "$(dirname "$makefile")" ]; then
+        echo "ath11k-firmware 目录不存在，非 ipq60xx 目标，跳过更新" >&2
         return 0
     fi
 
@@ -821,123 +822,57 @@ fix_netfilter_kmod_clash() {
     return 0
 }
 
-install_pbr_cmcc() {
+install_pbr_isp() {
+    local isp_lower="$1"
+    local isp_upper="$2"
+
     local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
     local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
     local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
     local pbr_makefile="$pbr_pkg_dir/Makefile"
+    local tmp_rules
 
-    if [ -d "$pbr_pkg_dir" ]; then
-        echo "正在安装 PBR CMCC 配置文件..."
-        install -Dm644 "$BASE_PATH/patches/pbr.user.cmcc" "$pbr_dir/pbr.user.cmcc"
-        install -Dm644 "$BASE_PATH/patches/pbr.user.cmcc6" "$pbr_dir/pbr.user.cmcc6"
-
-        if [ -f "$pbr_makefile" ]; then
-            if ! grep -q "pbr.user.cmcc" "$pbr_makefile"; then
-                echo "正在修改 PBR Makefile 添加 CMCC 安装规则..."
-                sed -i '/pbr\.user\.netflix.*\$(1)/a\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc $(1)/usr/share/pbr/pbr.user.cmcc\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cmcc6 $(1)/usr/share/pbr/pbr.user.cmcc6' "$pbr_makefile"
-            fi
-        fi
+    if [ ! -d "$pbr_pkg_dir" ]; then
+        echo "错误：PBR 包目录不存在: $pbr_pkg_dir" >&2
+        return 1
     fi
 
-    if [ -f "$pbr_conf" ]; then
-        if ! grep -q "pbr.user.cmcc" "$pbr_conf"; then
-            echo "正在添加 PBR CMCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
-                /option enabled '0'/a\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.cmcc'\\
-	option enabled '0'\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.cmcc6'\\
+    echo "正在安装 PBR $isp_upper 配置文件..."
+    install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}" "$pbr_dir/pbr.user.${isp_lower}"
+    install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}6" "$pbr_dir/pbr.user.${isp_lower}6"
+
+    if [ -f "$pbr_makefile" ] && ! grep -q "pbr.user.${isp_lower}" "$pbr_makefile"; then
+        echo "正在修改 PBR Makefile 添加 $isp_upper 安装规则..."
+        tmp_rules=$(mktemp)
+        printf '\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s $(1)/usr/share/pbr/pbr.user.%s\n' \
+            "$isp_lower" "$isp_lower" > "$tmp_rules"
+        printf '\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s6 $(1)/usr/share/pbr/pbr.user.%s6\n' \
+            "$isp_lower" "$isp_lower" >> "$tmp_rules"
+        sed -i "/pbr\.user\.netflix.*\$(1)/r $tmp_rules" "$pbr_makefile"
+        rm -f "$tmp_rules"
+    fi
+
+    if [ -f "$pbr_conf" ] && ! grep -q "pbr.user.${isp_lower}" "$pbr_conf"; then
+        echo "正在添加 PBR $isp_upper 配置条目..."
+        tmp_rules=$(mktemp)
+        cat > "$tmp_rules" << PBRCONFEOF
+
+config include
+	option path '/usr/share/pbr/pbr.user.${isp_lower}'
 	option enabled '0'
-            }" "$pbr_conf"
-        fi
+
+config include
+	option path '/usr/share/pbr/pbr.user.${isp_lower}6'
+	option enabled '0'
+PBRCONFEOF
+        sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{/option enabled '0'/r $tmp_rules}" "$pbr_conf"
+        rm -f "$tmp_rules"
     fi
 }
 
-install_pbr_ctcc() {
-    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
-    local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
-    local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
-    local pbr_makefile="$pbr_pkg_dir/Makefile"
-
-    if [ -d "$pbr_pkg_dir" ]; then
-        echo "正在安装 PBR CTCC 配置文件..."
-        install -Dm644 "$BASE_PATH/patches/pbr.user.ctcc" "$pbr_dir/pbr.user.ctcc"
-        install -Dm644 "$BASE_PATH/patches/pbr.user.ctcc6" "$pbr_dir/pbr.user.ctcc6"
-
-        if [ -f "$pbr_makefile" ]; then
-            if ! grep -q "pbr.user.ctcc" "$pbr_makefile"; then
-                echo "正在修改 PBR Makefile 添加 CTCC 安装规则..."
-                sed -i '/pbr\.user\.netflix.*\$(1)/a\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.ctcc $(1)/usr/share/pbr/pbr.user.ctcc\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.ctcc6 $(1)/usr/share/pbr/pbr.user.ctcc6' "$pbr_makefile"
-            fi
-        fi
-    fi
-
-    if [ -f "$pbr_conf" ]; then
-        if ! grep -q "pbr.user.ctcc" "$pbr_conf"; then
-            echo "正在添加 PBR CTCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
-                /option enabled '0'/a\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.ctcc'\\
-	option enabled '0'\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.ctcc6'\\
-	option enabled '0'
-            }" "$pbr_conf"
-        fi
-    fi
-}
-
-install_pbr_cucc() {
-    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
-    local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
-    local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
-    local pbr_makefile="$pbr_pkg_dir/Makefile"
-
-    if [ -d "$pbr_pkg_dir" ]; then
-        echo "正在安装 PBR CUCC 配置文件..."
-        install -Dm644 "$BASE_PATH/patches/pbr.user.cucc" "$pbr_dir/pbr.user.cucc"
-        install -Dm644 "$BASE_PATH/patches/pbr.user.cucc6" "$pbr_dir/pbr.user.cucc6"
-
-        if [ -f "$pbr_makefile" ]; then
-            if ! grep -q "pbr.user.cucc" "$pbr_makefile"; then
-                echo "正在修改 PBR Makefile 添加 CUCC 安装规则..."
-                sed -i '/pbr\.user\.netflix.*\$(1)/a\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cucc $(1)/usr/share/pbr/pbr.user.cucc\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.cucc6 $(1)/usr/share/pbr/pbr.user.cucc6' "$pbr_makefile"
-            fi
-        fi
-    fi
-
-    if [ -f "$pbr_conf" ]; then
-        if ! grep -q "pbr.user.cucc" "$pbr_conf"; then
-            echo "正在添加 PBR CUCC 配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
-                /option enabled '0'/a\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.cucc'\\
-	option enabled '0'\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.cucc6'\\
-	option enabled '0'
-            }" "$pbr_conf"
-        fi
-    fi
-}
-
+install_pbr_cmcc() { install_pbr_isp "cmcc" "CMCC"; }
+install_pbr_ctcc() { install_pbr_isp "ctcc" "CTCC"; }
+install_pbr_cucc() { install_pbr_isp "cucc" "CUCC"; }
 fix_pbr_ip_forward() {
     local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
     local pbr_init_script="$pbr_pkg_dir/files/etc/init.d/pbr"
@@ -1138,10 +1073,10 @@ fix_tuic_downgrade() {
     # ImmortalWrt 24.10 使用 Rust 1.90 stable，main 分支自编译 Rust 1.94。
     # tuic-client v1.8.0+ 使用 if-let guard（稳定于 Rust 1.95），均无法编译。
     # v1.7.2 不含此特性，可正常编译。此处将版本回退到 1.7.2。
-    # small8 feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
+    # custom_feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
     # 适用：x86_64 (24.10/Rust 1.90) + ipq60xx ARM64 (main/Rust 1.94)
     local tuic_mk
-    tuic_mk=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -path '*/small8/tuic-client/Makefile' 2>/dev/null | head -1)
+    tuic_mk=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -path '*/tuic-client/Makefile' -type f 2>/dev/null | head -1)
     [ -n "$tuic_mk" ] && [ -f "$tuic_mk" ] || return 0
 
     local current_ver
