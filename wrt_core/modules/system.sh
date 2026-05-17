@@ -483,46 +483,42 @@ update_menu_location() {
     # 将代理类应用从"服务"移到"VPN"菜单
     # passwall/passwall2/openclash 使用传统 controller lua 定义菜单（无 menu.d/*.json）
     # homeproxy/momo/nikki 使用 JSON 菜单文件
-    # luci feed 有 applications/ 子目录嵌套，不能用 $feed_dir/luci-app-$app 直接构造路径
-    # pitfall: ext4 readdir 非字母序，head -1 可能选中非编译 feed 的副本；改为遍历所有匹配项
+    # 参照 fix_easytier_lua pattern：直接构造路径，不用 find（避免符号链接/feed 位置差异问题）
+    # 各 app 所在 feed：passwall/homeproxy/openclash/momo/nikki → custom_feed，passwall2 → passwall2
     local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
     local app
     for app in $proxy_apps; do
-        # 方式1: JSON 菜单文件 (homeproxy/momo/nikki 及 feed 自带 JSON 的 app)
-        # menu.d 在 feeds/ 下深度 7-8，maxdepth 9 确保覆盖 luci feed 的 applications/ 子目录
-        # pitfall: feeds/custom_feed 是符号链接，find 默认不跟随，必须显式添加 $(get_custom_feed_source_dir)
-        local menu_dirs
-        menu_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null)
-        if [ -n "$menu_dirs" ]; then
-            while IFS= read -r menu_dir; do
-                [ -n "$menu_dir" ] && [ -d "$menu_dir" ] || continue
-                find "$menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
-                echo "[menu] $app: services -> vpn (JSON menu.d) — $menu_dir"
-            done <<< "$menu_dirs"
+        # 确定该 app 所在的 feed 根目录
+        local app_feed
+        case "$app" in
+            passwall2) app_feed="$BUILD_DIR/feeds/passwall2" ;;
+            *)         app_feed="$(get_custom_feed_source_dir)" ;;
+        esac
+
+        # 方式1: JSON 菜单文件 (homeproxy/momo/nikki)
+        local json_dir="$app_feed/luci-app-$app/root/usr/share/luci/menu.d"
+        if [ -d "$json_dir" ]; then
+            find "$json_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
+            echo "[menu] $app: services -> vpn (JSON menu.d) — $json_dir"
         fi
 
         # 方式2: Controller lua 文件 (passwall/passwall2/openclash)
         # passwall/passwall2 使用 appname 变量 (appname="passwall")，openclash 用字面字符串
-        # maxdepth 8 覆盖 luci/applications/ 等深层嵌套
-        # pitfall: feeds/custom_feed 是符号链接，必须显式添加 $(get_custom_feed_source_dir)
-        local ctrl_files
-        ctrl_files=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path "*/luci-app-$app/luasrc/controller/$app.lua" 2>/dev/null)
-        if [ -n "$ctrl_files" ]; then
-            while IFS= read -r ctrl_file; do
-                [ -n "$ctrl_file" ] && [ -f "$ctrl_file" ] || continue
-                # 模式A: 字面 app 名 (如 openclash)
-                sed -i "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" "$ctrl_file"
-                # 模式B: appname 变量 (如 passwall: appname="passwall")
-                sed -i 's/"admin", "services", appname/"admin", "vpn", appname/g' "$ctrl_file"
-                # 验证 sed 是否实际匹配到了内容
-                if grep -q '"admin", "vpn", appname\|"admin", "vpn", "'"$app"'"' "$ctrl_file" 2>/dev/null; then
-                    echo "[menu] $app: services -> vpn (controller lua, verified) — $ctrl_file"
-                else
-                    echo "[menu] $app: controller lua found but sed may not have matched — $ctrl_file"
-                fi
-            done <<< "$ctrl_files"
+        local ctrl_file="$app_feed/luci-app-$app/luasrc/controller/$app.lua"
+        if [ -f "$ctrl_file" ]; then
+            # 模式A: 字面 app 名 (如 openclash)
+            sed -i "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" "$ctrl_file"
+            # 模式B: appname 变量 (如 passwall: appname="passwall")
+            sed -i 's/"admin", "services", appname/"admin", "vpn", appname/g' "$ctrl_file"
+            # 验证 sed 是否实际匹配到了内容
+            if grep -q '"admin", "vpn", appname\|"admin", "vpn", "'"$app"'"' "$ctrl_file" 2>/dev/null; then
+                echo "[menu] $app: services -> vpn (controller lua, verified) — $ctrl_file"
+            else
+                echo "[menu] $app: controller lua found but sed may not have matched — $ctrl_file"
+            fi
         fi
     done
+
 
     # PBR (策略路由) 移到"网络"菜单
     local pbr_menu_dirs
@@ -547,21 +543,18 @@ update_menu_location() {
     fi
 
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
-    local bandix_menu_dirs
-    bandix_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-bandix/root/usr/share/luci/menu.d" 2>/dev/null)
-    if [ -n "$bandix_menu_dirs" ]; then
-        while IFS= read -r bandix_menu_dir; do
-            [ -n "$bandix_menu_dir" ] && [ -d "$bandix_menu_dir" ] || continue
-            find "$bandix_menu_dir" -maxdepth 1 -name '*.json' \
-                -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
-            # WireGuard 在状态菜单的 order 通常是 4，bandix 设 8 排在它下面
-            local bandix_json
-            bandix_json=$(find "$bandix_menu_dir" -maxdepth 1 -name '*.json' | head -1)
-            if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
-                sed -i 's/"order": 90/"order": 8/' "$bandix_json"
-            fi
-            echo "[menu] bandix: network -> status (order=8) — $bandix_menu_dir"
-        done <<< "$bandix_menu_dirs"
+    # 参照 fix_easytier_lua pattern：直接构造路径，luci-app-bandix 在 luci_app_bandix feed 下
+    local bandix_json_dir="$BUILD_DIR/feeds/luci_app_bandix/luci-app-bandix/root/usr/share/luci/menu.d"
+    if [ -d "$bandix_json_dir" ]; then
+        find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
+            -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
+        # WireGuard 在状态菜单的 order 通常是 4，bandix 设 8 排在它下面
+        local bandix_json
+        bandix_json=$(find "$bandix_json_dir" -maxdepth 1 -name '*.json' | head -1)
+        if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
+            sed -i 's/"order": 90/"order": 8/' "$bandix_json"
+        fi
+        echo "[menu] bandix: network -> status (order=8) — $bandix_json_dir"
     fi
 }
 
@@ -1114,11 +1107,15 @@ fix_tuic_downgrade() {
 }
 
 fix_bandix_default_enabled() {
-    # openwrt-bandix 可能来自多个 feed（custom_feed 或 openwrt_bandix），用 find 定位
+    # 参照 fix_easytier_lua pattern：直接构造路径，不用 find
+    # openwrt-bandix 可能在 openwrt_bandix 或 luci_app_bandix feed 下
     local bandix_config
-    bandix_config=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -type f -path '*/openwrt-bandix/files/bandix.config' 2>/dev/null | head -1)
-    if [ -n "$bandix_config" ] && [ -f "$bandix_config" ]; then
-        sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
-        echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
-    fi
+    for feed in openwrt_bandix luci_app_bandix; do
+        bandix_config="$BUILD_DIR/feeds/$feed/openwrt-bandix/files/bandix.config"
+        if [ -f "$bandix_config" ]; then
+            sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
+            echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
+            return 0
+        fi
+    done
 }
