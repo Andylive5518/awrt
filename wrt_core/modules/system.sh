@@ -425,7 +425,7 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/
     if [ -n "$version_number" ]; then
         local fixed=0
         while IFS= read -r -d '' f; do
-            sed -i "s|\\$(call.q*strip,\\$(CONFIG_VERSION_NUMBER))|${version_number}|g" "$f"
+            sed -i 's|$(call qstrip,$(CONFIG_VERSION_NUMBER))|'"${version_number}"'|g' "$f"
             sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
             fixed=1
         done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
