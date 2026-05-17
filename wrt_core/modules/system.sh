@@ -490,8 +490,9 @@ update_menu_location() {
     for app in $proxy_apps; do
         # 方式1: JSON 菜单文件 (homeproxy/momo/nikki 及 feed 自带 JSON 的 app)
         # menu.d 在 feeds/ 下深度 7-8，maxdepth 9 确保覆盖 luci feed 的 applications/ 子目录
+        # pitfall: feeds/custom_feed 是符号链接，find 默认不跟随，必须显式添加 $(get_custom_feed_source_dir)
         local menu_dirs
-        menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null)
+        menu_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$app/root/usr/share/luci/menu.d" 2>/dev/null)
         if [ -n "$menu_dirs" ]; then
             while IFS= read -r menu_dir; do
                 [ -n "$menu_dir" ] && [ -d "$menu_dir" ] || continue
@@ -503,8 +504,9 @@ update_menu_location() {
         # 方式2: Controller lua 文件 (passwall/passwall2/openclash)
         # passwall/passwall2 使用 appname 变量 (appname="passwall")，openclash 用字面字符串
         # maxdepth 8 覆盖 luci/applications/ 等深层嵌套
+        # pitfall: feeds/custom_feed 是符号链接，必须显式添加 $(get_custom_feed_source_dir)
         local ctrl_files
-        ctrl_files=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path "*/luci-app-$app/luasrc/controller/$app.lua" 2>/dev/null)
+        ctrl_files=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path "*/luci-app-$app/luasrc/controller/$app.lua" 2>/dev/null)
         if [ -n "$ctrl_files" ]; then
             while IFS= read -r ctrl_file; do
                 [ -n "$ctrl_file" ] && [ -f "$ctrl_file" ] || continue
@@ -629,12 +631,13 @@ fix_quickstart() {
 update_oaf_deconfig() {
     # open-app-filter 可能来自多个 feed（custom_feed 或 packages），用 find 定位
     # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
+    # pitfall: feeds/custom_feed 是符号链接，find 默认不跟随，必须显式添加 $(get_custom_feed_source_dir)
     local appfilter_confs
-    appfilter_confs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
+    appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
     local uci_defs
-    uci_defs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
+    uci_defs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
     local disable_dirs
-    disable_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
+    disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
     # 修改 appfilter.config（所有 feed 副本）
     # ipq60xx: auto_load_engine=0（ARM 内核模块兼容性问题）
@@ -1035,11 +1038,9 @@ fix_nikki_gobinpackage() {
     # 第 301 行全局挂载（ifneq ($(strip $(GO_PKG)),) ... Build/InstallDev=...），
     # 所以不能通过在 nikki 文件内匹配 Build/InstallDev 来修复，
     # 必须在 golang-package.mk include 之后追加空的 define Build/InstallDev/enef 来覆盖。
-    # 路径查找：nikki 在 custom_feed 下，同时 feeds/custom_feed 是符号链接
-    # GNU find 默认不跟随符号链接 (-P)，所以必须同时搜索 custom_feed 和 feeds 两个位置
-    local nikki_makefile
-    nikki_makefile=$(find "$BUILD_DIR/custom_feed" "$BUILD_DIR/feeds" -maxdepth 4 -path '*/nikki/Makefile' -type f 2>/dev/null | head -1)
-    if [ -n "$nikki_makefile" ] && [ -f "$nikki_makefile" ]; then
+    # nikki 在 custom_feed 下，参照 fix_easytier_lua 用 helper 直接定位，不走 find（避免符号链接问题）
+    local nikki_makefile="$(get_custom_feed_package_dir)/nikki/Makefile"
+    if [ -f "$nikki_makefile" ]; then
         local fixed=0
 
         # 修复1：GoBinPackage -> GoPackage + 在空的 Build/Compile 中加入 GoPackage/Compile
@@ -1094,9 +1095,9 @@ fix_tuic_downgrade() {
     # v1.7.2 不含此特性，可正常编译。此处将版本回退到 1.7.2。
     # custom_feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
     # 适用：x86_64 (24.10/Rust 1.90) + ipq60xx ARM64 (main/Rust 1.94)
-    local tuic_mk
-    tuic_mk=$(find "$BUILD_DIR/feeds/" -maxdepth 4 -path '*/tuic-client/Makefile' -type f 2>/dev/null | head -1)
-    [ -n "$tuic_mk" ] && [ -f "$tuic_mk" ] || return 0
+    # 参照 fix_easytier_lua 用 helper 直接定位，不走 find（避免符号链接问题）
+    local tuic_mk="$(get_custom_feed_package_dir)/tuic-client/Makefile"
+    [ -f "$tuic_mk" ] || return 0
 
     local current_ver
     current_ver=$(grep -oP '^PKG_VERSION:=\K[0-9.]+' "$tuic_mk" 2>/dev/null)
