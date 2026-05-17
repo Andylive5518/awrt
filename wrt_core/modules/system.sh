@@ -1020,8 +1020,25 @@ enable_ttyd_autologin() {
 }
 
 fix_nikki_gobinpackage() {
+    # nikki 上游 Makefile 使用 GoBinPackage，但 Build/Compile 是空的，
+    # 导致 install_src 失败：找不到 .go_work/build/src/github.com/metacubex/mihomo
+    #
+    # 正确思路：nikki 本身不该编译 mihomo，只作为配置/UI 包。
+    # mihomo 二进制由 small8/mihomo（GoBinPackage，自带完整源码）提供。
+    # nikki 的 +mihomo 依赖通过 small8/mihomo 的 PROVIDES:=mihomo 满足。
+    #
+    # 修复方法：
+    # 1. GoBinPackage -> GoPackage，在空的 Build/Compile 中添加 GoPackage/Compile
+    # 2. 在 $(eval ...) 之前追加空的 Build/InstallDev，覆盖 golang-package.mk 的全局挂载
+    #
+    # 注意：Build/InstallDev 不在 nikki Makefile 里定义——它由 golang-package.mk
+    # 第 301 行全局挂载（ifneq ($(strip $(GO_PKG)),) ... Build/InstallDev=...），
+    # 所以不能通过在 nikki 文件内匹配 Build/InstallDev 来修复，
+    # 必须在 golang-package.mk include 之后追加空的 define Build/InstallDev/enef 来覆盖。
+    # 路径查找：nikki 在 custom_feed 下，同时 feeds/custom_feed 是符号链接
+    # GNU find 默认不跟随符号链接 (-P)，所以必须同时搜索 custom_feed 和 feeds 两个位置
     local nikki_makefile
-    nikki_makefile=$(find "$BUILD_DIR/feeds" -maxdepth 4 -path '*/nikki/Makefile' -type f 2>/dev/null | head -1)
+    nikki_makefile=$(find "$BUILD_DIR/custom_feed" "$BUILD_DIR/feeds" -maxdepth 4 -path '*/nikki/Makefile' -type f 2>/dev/null | head -1)
     if [ -n "$nikki_makefile" ] && [ -f "$nikki_makefile" ]; then
         local fixed=0
 
