@@ -483,7 +483,6 @@ update_menu_location() {
     # 将代理类应用从"服务"移到"VPN"菜单
     # passwall/passwall2/openclash 使用传统 controller lua 定义菜单（无 menu.d/*.json）
     # homeproxy/momo/nikki 使用 JSON 菜单文件
-    # 参照 fix_easytier_lua pattern：直接构造路径，不用 find（避免符号链接/feed 位置差异问题）
     # 各 app 所在 feed：passwall/homeproxy/openclash/momo/nikki → custom_feed，passwall2 → passwall2
     local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
     local app
@@ -543,7 +542,6 @@ update_menu_location() {
     fi
 
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
-    # 参照 fix_easytier_lua pattern：直接构造路径，luci-app-bandix 在 luci_app_bandix feed 下
     local bandix_json_dir="$BUILD_DIR/feeds/luci_app_bandix/luci-app-bandix/root/usr/share/luci/menu.d"
     if [ -d "$bandix_json_dir" ]; then
         find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
@@ -624,7 +622,6 @@ fix_quickstart() {
 update_oaf_deconfig() {
     # open-app-filter 可能来自多个 feed（custom_feed 或 packages），用 find 定位
     # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
-    # pitfall: feeds/custom_feed 是符号链接，find 默认不跟随，必须显式添加 $(get_custom_feed_source_dir)
     local appfilter_confs
     appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
     local uci_defs
@@ -1031,7 +1028,6 @@ fix_nikki_gobinpackage() {
     # 第 301 行全局挂载（ifneq ($(strip $(GO_PKG)),) ... Build/InstallDev=...），
     # 所以不能通过在 nikki 文件内匹配 Build/InstallDev 来修复，
     # 必须在 golang-package.mk include 之后追加空的 define Build/InstallDev/enef 来覆盖。
-    # nikki 在 custom_feed 下，参照 fix_easytier_lua 用 helper 直接定位，不走 find（避免符号链接问题）
     local nikki_makefile="$(get_custom_feed_package_dir)/nikki/Makefile"
     if [ -f "$nikki_makefile" ]; then
         local fixed=0
@@ -1088,7 +1084,6 @@ fix_tuic_downgrade() {
     # v1.7.2 不含此特性，可正常编译。此处将版本回退到 1.7.2。
     # custom_feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
     # 适用：x86_64 (24.10/Rust 1.90) + ipq60xx ARM64 (main/Rust 1.94)
-    # 参照 fix_easytier_lua 用 helper 直接定位，不走 find（避免符号链接问题）
     local tuic_mk="$(get_custom_feed_package_dir)/tuic-client/Makefile"
     [ -f "$tuic_mk" ] || return 0
 
@@ -1107,15 +1102,10 @@ fix_tuic_downgrade() {
 }
 
 fix_bandix_default_enabled() {
-    # 参照 fix_easytier_lua pattern：直接构造路径，不用 find
-    # openwrt-bandix 可能在 openwrt_bandix 或 luci_app_bandix feed 下
-    local bandix_config
-    for feed in openwrt_bandix luci_app_bandix; do
-        bandix_config="$BUILD_DIR/feeds/$feed/openwrt-bandix/files/bandix.config"
-        if [ -f "$bandix_config" ]; then
-            sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
-            echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
-            return 0
-        fi
-    done
+    # openwrt-bandix 只在 openwrt_bandix feed 下（luci_app_bandix feed 只含 luci-app-bandix，不含 openwrt-bandix）
+    local bandix_config="$BUILD_DIR/feeds/openwrt_bandix/openwrt-bandix/files/bandix.config"
+    if [ -f "$bandix_config" ]; then
+        sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
+        echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
+    fi
 }
