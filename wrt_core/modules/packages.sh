@@ -59,16 +59,16 @@ remove_unwanted_packages() {
         fi
     done
 
-    if [[ -d ./feeds/small8 ]]; then
-        \rm -rf ./feeds/small8
-    fi
-    if [[ -d ./package/feeds/small8 ]]; then
-        \rm -rf ./package/feeds/small8
-    fi
+    # if [[ -d ./feeds/small8 ]]; then
+    #     \rm -rf ./feeds/small8
+    # fi
+    # if [[ -d ./package/feeds/small8 ]]; then
+    #     \rm -rf ./package/feeds/small8
+    # fi
 
-    if [[ -d ./package/istore ]]; then
-        \rm -rf ./package/istore
-    fi
+    # if [[ -d ./package/istore ]]; then
+    #     \rm -rf ./package/istore
+    # fi
 
     if [ -d "$BUILD_DIR/target/linux/qualcommax/base-files/etc/uci-defaults" ]; then
         find "$BUILD_DIR/target/linux/qualcommax/base-files/etc/uci-defaults/" -type f -name "99*.sh" -exec rm -f {} +
@@ -181,23 +181,21 @@ install_custom_feed() {
     local custom_feed_name
 
     local base_custom_feed_packages=(
-        xray-core xray-plugin dns2tcp dns2socks hysteria \
-        naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin \
+        xray-core xray-plugin dns2tcp dns2socks hysteria microsocks \
+        naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
         tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
-        v2dat adguardhome luci-app-adguardhome ddns-go \
+        v2dat luci-app-adguardhome ddns-go luci-app-iperf3-server \
         luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
-        luci-app-quickstart luci-app-istorex luci-app-cloudflarespeedtest netdata luci-app-netdata \
+        luci-app-quickstart luci-app-istorex cdnspeedtest luci-app-cloudflarespeedtest netdata luci-app-netdata \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
-        oaf open-app-filter luci-app-oaf luci-app-easytier \
+        oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd \
-        luci-app-fullconenat luci-app-partexp luci-app-momo nikki luci-app-nikki \
-        luci-app-zerotier luci-app-wechatpush luci-app-autoreboot
+        luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
+        luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
+        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix
     )
     local required_feed_dirs=(
-        cups tcping v2ray-geodata luci-lib-taskd luci-app-openclash
-        luci-app-quickstart luci-app-store luci-app-homeproxy luci-app-mosdns
-        luci-app-passwall nikki luci-app-nikki mihomo-meta
-        open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
+        v2ray-core v2ray-geodata adguardhome
     )
     local custom_feed_sources=()
     local missing_feed_dirs=()
@@ -216,10 +214,8 @@ install_custom_feed() {
     fi
 
     custom_feed_sources=(
-        "kenzok8/jell|https://github.com/kenzok8/jell.git||${base_custom_feed_packages[*]}"
-        "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns"
-        "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
-        "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
+        "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
+        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata adguardhome"
     )
 
     feeds_path=$(get_feeds_path)
@@ -264,7 +260,7 @@ verify_custom_feed_installed_paths() {
     local custom_feed_package_dir
     local required_package_dirs=(
         luci-app-adguardhome luci-app-mosdns v2ray-geodata luci-app-easytier
-        luci-app-passwall nikki luci-app-nikki mihomo-meta
+        luci-app-passwall nikki luci-app-nikki
     )
     local missing_package_dirs=()
 

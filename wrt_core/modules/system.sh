@@ -480,44 +480,28 @@ update_menu_location() {
         sed -i 's/services/vpn/g' "$tailscale_path"
     fi
 
-    # 将代理类应用从"服务"移到"VPN"菜单
-    # passwall/passwall2/openclash 使用传统 controller lua 定义菜单（无 menu.d/*.json）
-    # homeproxy/momo/nikki 使用 JSON 菜单文件
-    # 各 app 所在 feed：passwall/homeproxy/openclash/momo/nikki → custom_feed，passwall2 → passwall2
+    # 代理类应用 services → vpn（JSON menu.d / controller lua 两种方式）
     local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
+    local app_feed="$(get_custom_feed_source_dir)"
     local app
     for app in $proxy_apps; do
-        # 确定该 app 所在的 feed 根目录
-        local app_feed
-        case "$app" in
-            passwall2) app_feed="$BUILD_DIR/feeds/passwall2" ;;
-            *)         app_feed="$(get_custom_feed_source_dir)" ;;
-        esac
-
-        # 方式1: JSON 菜单文件 (homeproxy/momo/nikki)
         local json_dir="$app_feed/luci-app-$app/root/usr/share/luci/menu.d"
         if [ -d "$json_dir" ]; then
             find "$json_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
-            echo "[menu] $app: services -> vpn (JSON menu.d) — $json_dir"
+            echo "[menu] $app: services -> vpn — $json_dir"
         fi
 
-        # 方式2: Controller lua 文件 (passwall/passwall2/openclash)
-        # passwall/passwall2 使用 appname 变量 (appname="passwall")，openclash 用字面字符串
         local ctrl_file="$app_feed/luci-app-$app/luasrc/controller/$app.lua"
         if [ -f "$ctrl_file" ]; then
-            # 模式A: 字面 app 名 (如 openclash)
-            sed -i "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" "$ctrl_file"
-            # 模式B: appname 变量 (如 passwall: appname="passwall")
-            sed -i 's/"admin", "services", appname/"admin", "vpn", appname/g' "$ctrl_file"
-            # 验证 sed 是否实际匹配到了内容
-            if grep -q '"admin", "vpn", appname\|"admin", "vpn", "'"$app"'"' "$ctrl_file" 2>/dev/null; then
-                echo "[menu] $app: services -> vpn (controller lua, verified) — $ctrl_file"
-            else
-                echo "[menu] $app: controller lua found but sed may not have matched — $ctrl_file"
-            fi
+            sed -i \
+                -e 's/"admin", "services", appname/"admin", "vpn", appname/g' \
+                -e "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" \
+                "$ctrl_file"
+            grep -q '"admin", "vpn"' "$ctrl_file" 2>/dev/null \
+                && echo "[menu] $app: services -> vpn — $ctrl_file" \
+                || echo "[menu] $app: WARNING sed unmatched — $ctrl_file"
         fi
     done
-
 
     # PBR (策略路由) 移到"网络"菜单
     local pbr_menu_dirs
@@ -542,7 +526,7 @@ update_menu_location() {
     fi
 
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
-    local bandix_json_dir="$BUILD_DIR/feeds/luci_app_bandix/luci-app-bandix/root/usr/share/luci/menu.d"
+    local bandix_json_dir="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d"
     if [ -d "$bandix_json_dir" ]; then
         find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
             -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
@@ -620,7 +604,6 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    # open-app-filter 可能来自多个 feed（custom_feed 或 packages），用 find 定位
     # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
     local appfilter_confs
     appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
@@ -629,37 +612,30 @@ update_oaf_deconfig() {
     local disable_dirs
     disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
-    # 修改 appfilter.config（所有 feed 副本）
-    # ipq60xx: auto_load_engine=0（ARM 内核模块兼容性问题）
+    # 修改 appfilter.config
     if [ -n "$appfilter_confs" ]; then
         while IFS= read -r appfilter_conf; do
             [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
-            sed -i \
-                -e "s/record_enable '1'/record_enable '0'/g" \
-                -e "s/disable_hnat '1'/disable_hnat '0'/g" \
-                -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" \
-                "$appfilter_conf"
-            echo "[OAF] ipq60xx: auto_load_engine=0, record_enable=0, disable_hnat=0 — $appfilter_conf"
+            sed -i -e "s/record_enable '1'/record_enable '0'/g" \
+                   -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" "$appfilter_conf"
+            echo "[OAF] auto_load_engine=0, record_enable=0 — $appfilter_conf"
         done <<< "$appfilter_confs"
     fi
 
-    # 修改 94_feature_3.0（所有 feed 副本）
-    # ipq60xx: 同时删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
+    # 修改 94_feature_3.0，删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
     if [ -n "$uci_defs" ]; then
         while IFS= read -r uci_def; do
             [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
-            local cleaned=0
             if grep -q 'disable_hnat\|auto_load_engine' "$uci_def" 2>/dev/null; then
                 sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
-                cleaned=1
+                echo "[OAF] uci_def: removed disable_hnat + auto_load_engine — $uci_def"
+            else
+                echo "[OAF] uci_def: already clean — $uci_def"
             fi
-            [ "$cleaned" = "1" ] \
-                && echo "[OAF] uci_def: removed disable_hnat + auto_load_engine — $uci_def" \
-                || echo "[OAF] uci_def: already clean — $uci_def"
         done <<< "$uci_defs"
     fi
 
-    # 创建 99_disable_oaf（所有 feed 副本的 uci-defaults 目录）
+    # 创建 99_disable_oaf
     if [ -n "$disable_dirs" ]; then
         while IFS= read -r disable_dir; do
             [ -n "$disable_dir" ] && [ -d "$disable_dir" ] || continue
@@ -1103,7 +1079,7 @@ fix_tuic_downgrade() {
 
 fix_bandix_default_enabled() {
     # openwrt-bandix 只在 openwrt_bandix feed 下（luci_app_bandix feed 只含 luci-app-bandix，不含 openwrt-bandix）
-    local bandix_config="$BUILD_DIR/feeds/openwrt_bandix/openwrt-bandix/files/bandix.config"
+    local bandix_config="$(get_custom_feed_source_dir)/openwrt-bandix/files/bandix.config"
     if [ -f "$bandix_config" ]; then
         sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
         echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
