@@ -102,7 +102,7 @@ main() {
     install_pbr_ctcc
     install_pbr_cucc
     enable_ttyd_autologin
-    # fix_nikki_gobinpackage
+    fix_nikki_gobinpackage
     # fix_tuic_downgrade
     fix_pbr_ip_forward
     # apply_hash_fixes
