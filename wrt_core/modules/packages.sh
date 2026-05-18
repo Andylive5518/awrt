@@ -59,17 +59,6 @@ remove_unwanted_packages() {
         fi
     done
 
-    if [[ -d ./feeds/small8 ]]; then
-        \rm -rf ./feeds/small8
-    fi
-    if [[ -d ./package/feeds/small8 ]]; then
-        \rm -rf ./package/feeds/small8
-    fi
-
-    if [[ -d ./package/istore ]]; then
-        \rm -rf ./package/istore
-    fi
-
     if [ -d "$BUILD_DIR/target/linux/qualcommax/base-files/etc/uci-defaults" ]; then
         find "$BUILD_DIR/target/linux/qualcommax/base-files/etc/uci-defaults/" -type f -name "99*.sh" -exec rm -f {} +
     fi
@@ -260,7 +249,7 @@ verify_custom_feed_installed_paths() {
     local custom_feed_package_dir
     local required_package_dirs=(
         luci-app-adguardhome luci-app-mosdns v2ray-geodata luci-app-easytier
-        luci-app-passwall nikki luci-app-nikki mihomo-meta
+        luci-app-passwall nikki luci-app-nikki
     )
     local missing_package_dirs=()
 
