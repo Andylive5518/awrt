@@ -55,7 +55,7 @@ main() {
     # fix_mkpkg_format_invalid
     change_cpuusage
     update_tcping
-    fix_gettext_full_csharp
+    # fix_gettext_full_csharp
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks
@@ -97,13 +97,13 @@ main() {
     fix_openssl_ktls
     fix_opkg_check
     fix_netfilter_kmod_clash
-    fix_quectel_cm
+    # fix_quectel_cm
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
     enable_ttyd_autologin
-    fix_nikki_gobinpackage
-    fix_tuic_downgrade
+    # fix_nikki_gobinpackage
+    # fix_tuic_downgrade
     fix_pbr_ip_forward
     # apply_hash_fixes
 }

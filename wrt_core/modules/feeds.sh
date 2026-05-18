@@ -29,10 +29,6 @@ update_feeds() {
     sed -i '/[[:space:]]passwall[[:space:]]/d' "$FEEDS_PATH"
     sed -i '/[[:space:]]nikki[[:space:]]/d' "$FEEDS_PATH"
 
-    append_feed_if_missing "$FEEDS_PATH" "openwrt-passwall2" "src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2;main"
-    append_feed_if_missing "$FEEDS_PATH" "openwrt_bandix" "src-git openwrt_bandix https://github.com/timsaya/openwrt-bandix.git;main"
-    append_feed_if_missing "$FEEDS_PATH" "luci_app_bandix" "src-git luci_app_bandix https://github.com/timsaya/luci-app-bandix.git;main"
-
     if [ ! -f "$BUILD_DIR/include/bpf.mk" ]; then
         touch "$BUILD_DIR/include/bpf.mk"
     fi
