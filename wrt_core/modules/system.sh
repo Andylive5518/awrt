@@ -605,7 +605,6 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    # open-app-filter 可能来自多个 feed（custom_feed 或 packages），用 find 定位
     # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
     local appfilter_confs
     appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
@@ -614,7 +613,7 @@ update_oaf_deconfig() {
     local disable_dirs
     disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
-    # 修改 appfilter.config（所有 feed 副本）
+    # 修改 appfilter.config
     if [ -n "$appfilter_confs" ]; then
         while IFS= read -r appfilter_conf; do
             [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
@@ -624,8 +623,7 @@ update_oaf_deconfig() {
         done <<< "$appfilter_confs"
     fi
 
-    # 修改 94_feature_3.0（所有 feed 副本）
-    # 删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
+    # 修改 94_feature_3.0，删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
     if [ -n "$uci_defs" ]; then
         while IFS= read -r uci_def; do
             [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
@@ -638,7 +636,7 @@ update_oaf_deconfig() {
         done <<< "$uci_defs"
     fi
 
-    # 创建 99_disable_oaf（所有 feed 副本的 uci-defaults 目录）
+    # 创建 99_disable_oaf
     if [ -n "$disable_dirs" ]; then
         while IFS= read -r disable_dir; do
             [ -n "$disable_dir" ] && [ -d "$disable_dir" ] || continue
