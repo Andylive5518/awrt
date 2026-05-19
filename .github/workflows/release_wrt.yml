@@ -173,7 +173,7 @@ jobs:
             echo "  Release 创建成功，ID=${release_id}"
           fi
 
-          echo "[2/7] 打包 feeds/（排除下载的源码包）..."
+          echo "[2/5] 打包 feeds/ + custom_feed/（排除下载的源码包）..."
           mkdir -p build2025
           rsync -a \
             --exclude='.git' --exclude='.svn' \
@@ -181,10 +181,18 @@ jobs:
             --exclude='*.tar.*' --exclude='*.xz' --exclude='*.gz' --exclude='*.bz2' \
             --exclude='*.zip' --exclude='*.deb' --exclude='*.ipk' \
             "feeds/" "build2025/feeds/" 2>/dev/null || true
+          if [ -d "custom_feed" ]; then
+            rsync -a \
+              --exclude='.git' --exclude='.svn' \
+              --exclude='tmp' --exclude='staging_dir' --exclude='build_dir' \
+              --exclude='*.tar.*' --exclude='*.xz' --exclude='*.gz' --exclude='*.bz2' \
+              --exclude='*.zip' --exclude='*.deb' --exclude='*.ipk' \
+              "custom_feed/" "build2025/feeds/custom_feed/" 2>/dev/null || true
+          fi
           tar -czf "/tmp/build2025_feeds.tar.gz" -C . build2025/feeds/
           echo "  完成: $(du -h /tmp/build2025_feeds.tar.gz | cut -f1)"
 
-          echo "[3/7] 打包 package/（排除下载的源码包）..."
+          echo "[3/5] 打包 package/（排除下载的源码包）..."
           rsync -a \
             --exclude='.git' --exclude='.svn' \
             --exclude='tmp' --exclude='staging_dir' --exclude='build_dir' \
@@ -194,23 +202,7 @@ jobs:
           tar -czf "/tmp/build2025_package.tar.gz" -C . build2025/package/
           echo "  完成: $(du -h /tmp/build2025_package.tar.gz | cut -f1)"
 
-          echo "[4/7] 打包 feeds.conf.default ..."
-          if [ -f "feeds.conf.default" ]; then
-            tar -czf "/tmp/build2025_feeds_conf.tar.gz" feeds.conf.default
-            echo "  完成: $(du -h /tmp/build2025_feeds_conf.tar.gz | cut -f1)"
-          else
-            echo "  [跳过] feeds.conf.default 不存在"
-          fi
-
-          echo "[5/7] 打包 custom_feed/ ..."
-          if [ -d "custom_feed" ]; then
-            tar -czf "/tmp/build2025_custom_feed.tar.gz" custom_feed/
-            echo "  完成: $(du -h /tmp/build2025_custom_feed.tar.gz | cut -f1)"
-          else
-            echo "  [跳过] custom_feed/ 不存在"
-          fi
-
-          echo "[6/7] 打包 .config ..."
+          echo "[4/5] 打包 .config + feeds.conf.default ..."
           CONFIG_TMP_DIR="/tmp/build2025_config"
           rm -rf "$CONFIG_TMP_DIR"
           mkdir -p "$CONFIG_TMP_DIR"
@@ -255,11 +247,14 @@ jobs:
           fi
 
           if [ -f "$CONFIG_TMP_DIR/.config" ]; then
+            if [ -f "feeds.conf.default" ]; then
+              cp -f "feeds.conf.default" "$CONFIG_TMP_DIR/feeds.conf.default"
+            fi
             tar -czf /tmp/build2025_config.tar.gz -C "$CONFIG_TMP_DIR" .
             echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
           fi
 
-          echo "[7/7] 上传到 Release Assets ..."
+          echo "[5/5] 上传到 Release Assets ..."
 
           upload_asset() {
             local local_file="$1"
@@ -315,10 +310,6 @@ jobs:
           upload_asset "/tmp/build2025_feeds.tar.gz"   "feeds.tar.gz"
           echo "----------------------------------------"
           upload_asset "/tmp/build2025_package.tar.gz"  "package.tar.gz"
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_feeds_conf.tar.gz"   "feeds.conf.default.tar.gz"
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_custom_feed.tar.gz"  "custom_feed.tar.gz"
           echo "----------------------------------------"
           upload_asset "/tmp/build2025_config.tar.gz"   ".config.tar.gz"
           echo "----------------------------------------"
