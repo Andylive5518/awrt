@@ -151,7 +151,7 @@ jobs:
 
           cd "${OPENWRT_PATH}"
 
-          echo "[1/5] 创建 Release ..."
+          echo "[1/7] 创建 Release ..."
 
           release_id=""
           get_resp=$(curl -s -w "\n%{http_code}" \
@@ -184,7 +184,7 @@ jobs:
             echo "  Release 创建成功，ID=${release_id}"
           fi
 
-          echo "[2/5] 打包 feeds/（排除下载的源码包）..."
+          echo "[2/7] 打包 feeds/（排除下载的源码包）..."
           mkdir -p build2025
           rsync -a \
             --exclude='.git' --exclude='.svn' \
@@ -195,7 +195,7 @@ jobs:
           tar -czf "/tmp/build2025_feeds.tar.gz" -C . build2025/feeds/
           echo "  完成: $(du -h /tmp/build2025_feeds.tar.gz | cut -f1)"
 
-          echo "[3/5] 打包 package/（排除下载的源码包）..."
+          echo "[3/7] 打包 package/（排除下载的源码包）..."
           rsync -a \
             --exclude='.git' --exclude='.svn' \
             --exclude='tmp' --exclude='staging_dir' --exclude='build_dir' \
@@ -205,7 +205,23 @@ jobs:
           tar -czf "/tmp/build2025_package.tar.gz" -C . build2025/package/
           echo "  完成: $(du -h /tmp/build2025_package.tar.gz | cut -f1)"
 
-          echo "[4/5] 打包 .config ..."
+          echo "[4/7] 打包 feeds.conf.default ..."
+          if [ -f "feeds.conf.default" ]; then
+            tar -czf "/tmp/build2025_feeds_conf.tar.gz" feeds.conf.default
+            echo "  完成: $(du -h /tmp/build2025_feeds_conf.tar.gz | cut -f1)"
+          else
+            echo "  [跳过] feeds.conf.default 不存在"
+          fi
+
+          echo "[5/7] 打包 custom_feed/ ..."
+          if [ -d "custom_feed" ]; then
+            tar -czf "/tmp/build2025_custom_feed.tar.gz" custom_feed/
+            echo "  完成: $(du -h /tmp/build2025_custom_feed.tar.gz | cut -f1)"
+          else
+            echo "  [跳过] custom_feed/ 不存在"
+          fi
+
+          echo "[6/7] 打包 .config ..."
           CONFIG_TMP_DIR="/tmp/build2025_config"
           rm -rf "$CONFIG_TMP_DIR"
           mkdir -p "$CONFIG_TMP_DIR"
@@ -254,7 +270,7 @@ jobs:
             echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
           fi
 
-          echo "[5/5] 上传到 Release Assets ..."
+          echo "[7/7] 上传到 Release Assets ..."
 
           upload_asset() {
             local local_file="$1"
@@ -310,6 +326,10 @@ jobs:
           upload_asset "/tmp/build2025_feeds.tar.gz"   "feeds.tar.gz"
           echo "----------------------------------------"
           upload_asset "/tmp/build2025_package.tar.gz"  "package.tar.gz"
+          echo "----------------------------------------"
+          upload_asset "/tmp/build2025_feeds_conf.tar.gz"   "feeds.conf.default.tar.gz"
+          echo "----------------------------------------"
+          upload_asset "/tmp/build2025_custom_feed.tar.gz"  "custom_feed.tar.gz"
           echo "----------------------------------------"
           upload_asset "/tmp/build2025_config.tar.gz"   ".config.tar.gz"
           echo "----------------------------------------"
