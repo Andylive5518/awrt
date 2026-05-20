@@ -610,8 +610,6 @@ update_oaf_deconfig() {
     appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
     local uci_defs
     uci_defs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
-    local disable_dirs
-    disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
     # 修改 appfilter.config
     if [ -n "$appfilter_confs" ]; then
@@ -636,22 +634,8 @@ update_oaf_deconfig() {
         done <<< "$uci_defs"
     fi
 
-    # 创建 99_disable_oaf
-    if [ -n "$disable_dirs" ]; then
-        while IFS= read -r disable_dir; do
-            [ -n "$disable_dir" ] && [ -d "$disable_dir" ] || continue
-            local disable_path="$disable_dir/99_disable_oaf"
-            cat >"$disable_path" <<-'EOF'
-#!/bin/sh
-[ "$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
-    /etc/init.d/appfilter disable
-    /etc/init.d/appfilter stop
-}
-EOF
-            chmod +x "$disable_path"
-            echo "[OAF] 99_disable_oaf created — $disable_path"
-        done <<< "$disable_dirs"
-    fi
+    # 不再创建 99_disable_oaf。oafd 需保持运行以提供 ubus 接口（LuCI 版本显示依赖），
+    # auto_load_engine='0' 已保证不加载内核模块，enable='0' 保证不做过滤。
 }
 
 update_geoip() {
