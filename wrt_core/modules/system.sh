@@ -32,13 +32,6 @@ change_dnsmasq2full() {
     fi
 }
 
-fix_mk_def_depends() {
-    sed -i 's/libustream-mbedtls/libustream-openssl/g' $BUILD_DIR/include/target.mk 2>/dev/null
-    if [ -f $BUILD_DIR/target/linux/qualcommax/Makefile ]; then
-        sed -i 's/wpad-openssl/wpad-mesh-openssl/g' $BUILD_DIR/target/linux/qualcommax/Makefile
-    fi
-}
-
 fix_kconfig_recursive_dependency() {
     local file="$BUILD_DIR/scripts/package-metadata.pl"
     if [ -f "$file" ]; then
@@ -54,152 +47,8 @@ update_default_lan_addr() {
     fi
 }
 
-remove_something_nss_kmod() {
-    local ipq_mk_path="$BUILD_DIR/target/linux/qualcommax/Makefile"
-    local target_mks=("$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk" "$BUILD_DIR/target/linux/qualcommax/ipq807x/target.mk")
-
-    for target_mk in "${target_mks[@]}"; do
-        if [ -f "$target_mk" ]; then
-            sed -i 's/kmod-qca-nss-crypto//g' "$target_mk"
-        fi
-    done
-
-    if [ -f "$ipq_mk_path" ]; then
-        sed -i '/kmod-qca-nss-drv-eogremgr/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-gre/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-map-t/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-match/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-mirror/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-tun6rd/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-tunipip6/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-vxlanmgr/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-wifi-meshmgr/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-macsec/d' "$ipq_mk_path"
-
-        sed -i 's/automount //g' "$ipq_mk_path"
-        sed -i 's/cpufreq //g' "$ipq_mk_path"
-    fi
-}
-
-update_affinity_script() {
-    local affinity_script_dir="$BUILD_DIR/target/linux/qualcommax"
-
-    if [ -d "$affinity_script_dir" ]; then
-        find "$affinity_script_dir" -name "set-irq-affinity" -exec rm -f {} \;
-        find "$affinity_script_dir" -name "smp_affinity" -exec rm -f {} \;
-        install -Dm755 "$BASE_PATH/patches/smp_affinity" "$affinity_script_dir/base-files/etc/init.d/smp_affinity"
-    fi
-}
-
-fix_hash_value() {
-    local makefile_path="$1"
-    local old_hash="$2"
-    local new_hash="$3"
-    local package_name="$4"
-
-    if [ -f "$makefile_path" ]; then
-        sed -i "s/$old_hash/$new_hash/g" "$makefile_path"
-        echo "已修正 $package_name 的哈希值。"
-    fi
-}
-
-apply_hash_fixes() {
-    fix_hash_value \
-        "$BUILD_DIR/package/feeds/packages/smartdns/Makefile" \
-        "860a816bf1e69d5a8a2049483197dbebe8a3da2c9b05b2da68c85ef7dee7bdde" \
-        "582021891808442b01f551bc41d7d95c38fb00c1ec78a58ac3aaaf898fbd2b5b" \
-        "smartdns"
-
-    fix_hash_value \
-        "$BUILD_DIR/package/feeds/packages/smartdns/Makefile" \
-        "320c99a65ca67a98d11a45292aa99b8904b5ebae5b0e17b302932076bf62b1ec" \
-        "43e58467690476a77ce644f9dc246e8a481353160644203a1bd01eb09c881275" \
-        "smartdns"
-}
-
-update_ath11k_fw() {
-    local makefile="$BUILD_DIR/package/firmware/ath11k-firmware/Makefile"
-    local local_mk="$BASE_PATH/patches/ath11k_fw.mk"
-    local url="https://raw.githubusercontent.com/VIKINGYFY/immortalwrt/refs/heads/main/package/firmware/ath11k-firmware/Makefile"
-
-    if [ ! -d "$(dirname "$makefile")" ]; then
-        echo "ath11k-firmware 目录不存在，非 ipq60xx 目标，跳过更新" >&2
-        return 0
-    fi
-
-    echo "正在更新 ath11k-firmware Makefile..."
-
-    local tmp_mk
-    tmp_mk=$(mktemp) || { echo "错误：无法创建临时文件" >&2; exit 1; }
-
-    # Download upstream Makefile; fall back to local copy on failure
-    if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url"; then
-        echo "警告：从 $url 下载失败，使用本地 ath11k-firmware Makefile" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：无法从远程下载，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    if [ ! -s "$tmp_mk" ]; then
-        echo "警告：下载的 ath11k-firmware Makefile 为空，使用本地备用文件" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：下载的文件为空，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    # Validate: the downloaded Makefile must have a PKG_MIRROR_HASH line
-    if ! grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
-        echo "警告：下载的 Makefile 缺少 PKG_MIRROR_HASH，使用本地备用文件" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：下载的文件格式无效，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    mv -f "$tmp_mk" "$makefile"
-    rm -f "$tmp_mk"
-}
-
-fix_mkpkg_format_invalid() {
-    local custom_feed_worktree_dir
-    custom_feed_worktree_dir=$(get_custom_feed_worktree_dir)
-
-    if [[ $BUILD_DIR =~ "imm-nss" ]]; then
-        if [ -f "$custom_feed_worktree_dir/v2ray-geodata/Makefile" ]; then
-            sed -i 's/VER)-\$(PKG_RELEASE)/VER)-r\$(PKG_RELEASE)/g' "$custom_feed_worktree_dir/v2ray-geodata/Makefile"
-        fi
-        if [ -f "$custom_feed_worktree_dir/luci-lib-taskd/Makefile" ]; then
-            sed -i 's/>=1\.0\.3-1/>=1\.0\.3-r1/g' "$custom_feed_worktree_dir/luci-lib-taskd/Makefile"
-        fi
-        if [ -f "$custom_feed_worktree_dir/luci-app-openclash/Makefile" ]; then
-            sed -i 's/PKG_RELEASE:=beta/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-openclash/Makefile"
-        fi
-        if [ -f "$custom_feed_worktree_dir/luci-app-quickstart/Makefile" ]; then
-            sed -i 's/PKG_VERSION:=0\.8\.16-1/PKG_VERSION:=0\.8\.16/g' "$custom_feed_worktree_dir/luci-app-quickstart/Makefile"
-            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-quickstart/Makefile"
-        fi
-        if [ -f "$custom_feed_worktree_dir/luci-app-store/Makefile" ]; then
-            sed -i 's/PKG_VERSION:=0\.1\.27-1/PKG_VERSION:=0\.1\.27/g' "$custom_feed_worktree_dir/luci-app-store/Makefile"
-            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-store/Makefile"
-        fi
-    fi
-}
-
 change_cpuusage() {
     local luci_rpc_path="$BUILD_DIR/feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci"
-    local qualcommax_sbin_dir="$BUILD_DIR/target/linux/qualcommax/base-files/sbin"
-    local filogic_sbin_dir="$BUILD_DIR/target/linux/mediatek/filogic/base-files/sbin"
 
     if [ -f "$luci_rpc_path" ]; then
         sed -i "s#const fd = popen('top -n1 | awk \\\'/^CPU/ {printf(\"%d%\", 100 - \$8)}\\\'')#const cpuUsageCommand = access('/sbin/cpuusage') ? '/sbin/cpuusage' : 'top -n1 | awk \\\'/^CPU/ {printf(\"%d%\", 100 - \$8)}\\\''#g" "$luci_rpc_path"
@@ -209,13 +58,6 @@ change_cpuusage() {
     local old_script_path="$BUILD_DIR/package/base-files/files/sbin/cpuusage"
     if [ -f "$old_script_path" ]; then
         rm -f "$old_script_path"
-    fi
-
-    if [ -d "$BUILD_DIR/target/linux/qualcommax" ]; then
-        install -Dm755 "$BASE_PATH/patches/cpuusage" "$qualcommax_sbin_dir/cpuusage"
-    fi
-    if [ -d "$BUILD_DIR/target/linux/mediatek" ]; then
-        install -Dm755 "$BASE_PATH/patches/hnatusage" "$filogic_sbin_dir/cpuusage"
     fi
 }
 
@@ -230,115 +72,6 @@ update_tcping() {
             exit 1
         fi
     fi
-}
-
-fix_gettext_full_csharp() {
-    # gettext-full host 编译不需要 C# binding。部分版本的 gettext
-    # 会进入 gettext-runtime/intl-csharp 并调用 csharpcomp.sh；CI 未安装 Mono 时会报：
-    # "C# compiler not found, try installing mono, then reconfigure"。
-    # 这里直接从 PKG_SUBDIRS 中移除 intl-csharp，并添加 --disable-csharp，避免依赖 Mono。
-    # 不硬编码分支名，改为检测 Makefile 是否实际包含 intl-csharp。
-
-    local gettext_mk="$BUILD_DIR/package/libs/gettext-full/Makefile"
-    local tmp_mk="/tmp/gettext-full-Makefile-$$.mk"
-
-    if [ ! -f "$gettext_mk" ]; then
-        echo "gettext-full Makefile 不存在，跳过 C# binding 修复: $gettext_mk"
-        return 0
-    fi
-
-    if ! grep -q '^[[:space:]]*intl-csharp[[:space:]]*\\[[:space:]]*$' "$gettext_mk"; then
-        echo "gettext-full Makefile 不含 intl-csharp，无需修复"
-        return 0
-    fi
-
-    local add_disable_csharp=1
-    if grep -q -- '--disable-csharp' "$gettext_mk"; then
-        add_disable_csharp=0
-    fi
-
-    awk -v add_disable_csharp="$add_disable_csharp" '
-    /^[[:space:]]*intl-csharp[[:space:]]*\\[[:space:]]*$/ {
-        next
-    }
-
-    /^CONFIGURE_ARGS[[:space:]]*\+=/ {
-        in_configure = 1
-        in_host_configure = 0
-    }
-
-    /^HOST_CONFIGURE_ARGS[[:space:]]*\+=/ {
-        in_configure = 0
-        in_host_configure = 1
-    }
-
-    {
-        print
-
-        if (add_disable_csharp == 1 && in_configure && !configure_added && $0 ~ /^[[:space:]]*--disable-java[[:space:]]*\\[[:space:]]*$/) {
-            print "\t--disable-csharp \\"
-            configure_added = 1
-        }
-
-        if (add_disable_csharp == 1 && in_host_configure && !host_added && $0 ~ /^[[:space:]]*--disable-java[[:space:]]*\\[[:space:]]*$/) {
-            print "\t--disable-csharp \\"
-            host_added = 1
-        }
-
-        if ($0 !~ /\\[[:space:]]*$/) {
-            in_configure = 0
-            in_host_configure = 0
-        }
-    }
-    ' "$gettext_mk" > "$tmp_mk" && mv -f "$tmp_mk" "$gettext_mk"
-
-    if grep -q '^[[:space:]]*intl-csharp[[:space:]]*\\[[:space:]]*$' "$gettext_mk"; then
-        echo "错误：gettext-full Makefile 仍包含 intl-csharp，C# binding 修复失败" >&2
-        return 1
-    fi
-
-    echo "已修复 gettext-full: 禁用 intl-csharp/C# binding，避免依赖 Mono"
-}
-
-update_util_linux() {
-    local util_linux_dir="$BUILD_DIR/package/utils/util-linux"
-    local makefile_url="https://raw.githubusercontent.com/ZqinKing/immortalwrt/master/package/utils/util-linux/Makefile"
-    local tmp_makefile="/tmp/util-linux-Makefile-$$.mk"
-
-    if [ ! -d "$util_linux_dir" ]; then
-        echo "util-linux 目录不存在，跳过更新: $util_linux_dir"
-        return 0
-    fi
-
-    echo "正在更新 util-linux..."
-
-    if ! curl -fsSL -o "$tmp_makefile" "$makefile_url"; then
-        echo "错误：从 $makefile_url 下载 util-linux Makefile 失败" >&2
-        rm -f "$tmp_makefile"
-        return 1
-    fi
-
-    local ver
-    ver=$(grep -m1 "^PKG_VERSION" "$tmp_makefile" 2>/dev/null | sed 's/.*:=//' | tr -d ' ')
-    if [ "$ver" != "2.41.1" ]; then
-        echo "错误：ZqinKing 的 util-linux 版本已是 $ver（不是预期的 2.41.1），AT_HANDLE_FID 问题可能仍存在，停止更新。" >&2
-        echo "提示：请确认 ZqinKing 是否已同步上游，或手动检查 https://github.com/ZqinKing/immortalwrt/commits/master/package/utils/util-linux" >&2
-        rm -f "$tmp_makefile"
-        exit 1
-    fi
-
-    mv -f "$tmp_makefile" "$util_linux_dir/Makefile"
-
-    local patches_dir="$util_linux_dir/patches"
-    if [ -d "$patches_dir" ]; then
-        local zqin_patches_url="https://api.github.com/repos/ZqinKing/immortalwrt/contents/package/utils/util-linux/patches?ref=master"
-        if curl -fsSL "$zqin_patches_url" >/dev/null 2>&1; then
-            echo "正在更新 util-linux patches..."
-            find "$patches_dir" -maxdepth 1 -type f -name "[0-9][0-9][0-9]-*.patch" -exec rm -f {} \; 2>/dev/null || true
-        fi
-    fi
-
-    echo "util-linux 已更新到 ZqinKing 版本 ($ver)"
 }
 
 set_custom_task() {
@@ -387,22 +120,18 @@ install_opkg_distfeeds() {
     local ver_file="$BUILD_DIR/include/version.mk"
 
     local version_number
-    # VERSION_NUMBER 有两行：第1行是 $(call qstrip,...) 模板，第2行 $(if ...,fallback)
-    # 需要取 fallback 值（如 24.10.6），不是模板
+
     local raw_version
     raw_version=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
     version_number="$raw_version"
 
-    local arch="x86_64"
-
     if [ -d "$emortal_def_dir" ]; then
-        # 始终覆盖 distfeeds.conf，确保 URL 最新
         cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/base/
-src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/luci/
-src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/packages/
-src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/routing/
-src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/${arch}/telephony/
+src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/base/
+src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/luci/
+src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/packages/
+src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/routing/
+src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony/
 EOF
 
         # 仅在首次注入 install 规则和 uci-defaults mv 命令
@@ -416,11 +145,9 @@ EOF
 sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
         fi
 
-        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: ${arch}, raw: ${raw_version})"
+        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: x86_64, raw: ${raw_version})"
     fi
 
-    # 修复 ImmortalWrt build system 生成的 distfeeds 模板中未展开的变量
-    # find 范围覆盖 package/ include/ scripts/ feeds/ — 模板可能在 feeds 中
     if [ -n "$version_number" ]; then
         local fixed=0
         while IFS= read -r -d '' f; do
@@ -432,12 +159,10 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/
             -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
 
         if [ "$fixed" = "1" ]; then
-            echo "[opkg] distfeeds 模板已修复：${version_number} (arch: ${arch})"
+            echo "[opkg] distfeeds 模板已修复：${version_number} (arch: x86_64)"
         fi
     fi
 
-    # 修复 99-default-settings-chinese 中的 opkg/apk mirror 默认值
-    # 该文件没有扩展名，上面的 find *.conf|*.mk|*.sh 匹配不到
     local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
     if [ -f "$chn_settings" ]; then
         sed -i 's|https://mirrors\.vsean\.net/openwrt|https://downloads.immortalwrt.org|g' "$chn_settings"
@@ -445,26 +170,10 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/
     fi
 }
 
-update_nss_pbuf_performance() {
-    local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/pbuf.uci"
-    if [ -d "$(dirname "$pbuf_path")" ] && [ -f $pbuf_path ]; then
-        sed -i "s/auto_scale '1'/auto_scale 'off'/g" $pbuf_path
-        sed -i "s/scaling_governor 'performance'/scaling_governor 'schedutil'/g" $pbuf_path
-    fi
-}
-
 set_build_signature() {
     local file="$BUILD_DIR/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js"
     if [ -d "$(dirname "$file")" ] && [ -f $file ]; then
         sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ build by Alex')/g" "$file"
-    fi
-}
-
-update_nss_diag() {
-    local file="$BUILD_DIR/package/kernel/mac80211/files/nss_diag.sh"
-    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
-        \rm -f "$file"
-        install -Dm755 "$BASE_PATH/patches/nss_diag.sh" "$file"
     fi
 }
 
@@ -502,34 +211,26 @@ update_menu_location() {
         fi
     done
 
-    # PBR (策略路由) 移到"网络"菜单
-    local pbr_menu_dirs
-    pbr_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-pbr/root/usr/share/luci/menu.d" 2>/dev/null)
-    if [ -n "$pbr_menu_dirs" ]; then
-        while IFS= read -r pbr_menu_dir; do
-            [ -n "$pbr_menu_dir" ] && [ -d "$pbr_menu_dir" ] || continue
-            find "$pbr_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-            echo "[menu] pbr: services -> network — $pbr_menu_dir"
-        done <<< "$pbr_menu_dirs"
-    fi
-
-    # WOL (网络唤醒) 移到"网络"菜单
-    local wol_menu_dirs
-    wol_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-wol/root/usr/share/luci/menu.d" 2>/dev/null)
-    if [ -n "$wol_menu_dirs" ]; then
-        while IFS= read -r wol_menu_dir; do
-            [ -n "$wol_menu_dir" ] && [ -d "$wol_menu_dir" ] || continue
-            find "$wol_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-            echo "[menu] wol: services -> network — $wol_menu_dir"
-        done <<< "$wol_menu_dirs"
-    fi
+    # PBR、WOL 等网络工具移到"网络"菜单（services → network）
+    local network_apps="pbr wol"
+    local net_app
+    for net_app in $network_apps; do
+        local net_menu_dirs
+        net_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$net_app/root/usr/share/luci/menu.d" 2>/dev/null)
+        if [ -n "$net_menu_dirs" ]; then
+            while IFS= read -r net_menu_dir; do
+                [ -n "$net_menu_dir" ] && [ -d "$net_menu_dir" ] || continue
+                find "$net_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
+                echo "[menu] $net_app: services -> network — $net_menu_dir"
+            done <<< "$net_menu_dirs"
+        fi
+    done
 
     # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
     local bandix_json_dir="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d"
     if [ -d "$bandix_json_dir" ]; then
         find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
             -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
-        # WireGuard 在状态菜单的 order 通常是 4，bandix 设 8 排在它下面
         local bandix_json
         bandix_json=$(find "$bandix_json_dir" -maxdepth 1 -name '*.json' | head -1)
         if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
@@ -566,16 +267,6 @@ EOF
 }
 
 update_script_priority() {
-    local qca_drv_path="$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
-    if [ -d "${qca_drv_path%/*}" ] && [ -f "$qca_drv_path" ]; then
-        sed -i 's/START=.*/START=88/g' "$qca_drv_path"
-    fi
-
-    local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/qca-nss-pbuf.init"
-    if [ -d "${pbuf_path%/*}" ] && [ -f "$pbuf_path" ]; then
-        sed -i 's/START=.*/START=89/g' "$pbuf_path"
-    fi
-
     local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
     if [ -d "${mosdns_path%/*}" ] && [ -f "$mosdns_path" ]; then
         sed -i 's/START=.*/START=94/g' "$mosdns_path"
@@ -603,7 +294,6 @@ fix_quickstart() {
 }
 
 update_oaf_deconfig() {
-    # pitfall: ext4 readdir 非字母序 + maxdepth 不够深 → 改为遍历所有匹配项 + maxdepth 8
     local appfilter_confs
     appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
     local uci_defs
@@ -863,35 +553,6 @@ fix_pbr_ip_forward() {
     fi
 }
 
-fix_quectel_cm() {
-    local makefile_path="$BUILD_DIR/package/feeds/packages/quectel-cm/Makefile"
-    local cmake_patch_path="$BUILD_DIR/package/feeds/packages/quectel-cm/patches/020-cmake.patch"
-
-    if [ -f "$makefile_path" ]; then
-        echo "正在修复 quectel-cm Makefile..."
-
-        sed -i '/^PKG_SOURCE:=/d' "$makefile_path"
-        sed -i '/^PKG_SOURCE_URL:=@IMMORTALWRT/d' "$makefile_path"
-        sed -i '/^PKG_HASH:=/d' "$makefile_path"
-
-        sed -i '/^PKG_RELEASE:=/a\
-\
-PKG_SOURCE_PROTO:=git\
-PKG_SOURCE_URL:=https://github.com/Carton32/quectel-CM.git\
-PKG_SOURCE_VERSION:=$(PKG_VERSION)\
-PKG_MIRROR_HASH:=skip' "$makefile_path"
-
-        sed -i 's/^PKG_RELEASE:=2$/PKG_RELEASE:=3/' "$makefile_path"
-
-        echo "quectel-cm Makefile 修复完成。"
-    fi
-
-    if [ -f "$cmake_patch_path" ]; then
-        sed -i 's/-cmake_minimum_required(VERSION 2\.4)$/-cmake_minimum_required(VERSION 2.4) /' "$cmake_patch_path"
-        sed -i 's/project(quectel-CM)$/project(quectel-CM) /' "$cmake_patch_path"
-    fi
-}
-
 set_nginx_default_config() {
     local nginx_config_path="$BUILD_DIR/feeds/packages/net/nginx-util/files/nginx.config"
     if [ -f "$nginx_config_path" ]; then
@@ -1006,31 +667,7 @@ fix_nikki_gobinpackage() {
     fi
 }
 
-fix_tuic_downgrade() {
-    # ImmortalWrt 24.10 使用 Rust 1.90 stable，main 分支自编译 Rust 1.94。
-    # tuic-client v1.8.0+ 使用 if-let guard（稳定于 Rust 1.95），均无法编译。
-    # v1.7.2 不含此特性，可正常编译。此处将版本回退到 1.7.2。
-    # custom_feed 的 PKG_HASH:=skip，因此只改版本号无需更新 hash。
-    # 适用：x86_64 (24.10/Rust 1.90) + ipq60xx ARM64 (main/Rust 1.94)
-    local tuic_mk="$(get_custom_feed_package_dir)/tuic-client/Makefile"
-    [ -f "$tuic_mk" ] || return 0
-
-    local current_ver
-    current_ver=$(grep -oP '^PKG_VERSION:=\K[0-9.]+' "$tuic_mk" 2>/dev/null)
-
-    case "$current_ver" in
-        1.8.[01])
-            sed -i "s/PKG_VERSION:=${current_ver}/PKG_VERSION:=1.7.2/" "$tuic_mk"
-            echo "[tuic-client] downgraded v${current_ver} → v1.7.2 (if-let guard needs Rust ≥1.95)"
-            ;;
-        *)
-            return 0
-            ;;
-    esac
-}
-
 fix_bandix_default_enabled() {
-    # openwrt-bandix 只在 openwrt_bandix feed 下（luci_app_bandix feed 只含 luci-app-bandix，不含 openwrt-bandix）
     local bandix_config="$(get_custom_feed_source_dir)/openwrt-bandix/files/bandix.config"
     if [ -f "$bandix_config" ]; then
         sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
