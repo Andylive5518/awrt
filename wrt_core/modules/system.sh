@@ -389,12 +389,11 @@ install_opkg_distfeeds() {
     local version_number
     # VERSION_NUMBER 有两行：第1行是 $(call qstrip,...) 模板，第2行 $(if ...,fallback)
     # 需要取 fallback 值（如 24.10.6），不是模板
-    # ipq60xx 用 SNAPSHOT：24.10.6 → 24.10-SNAPSHOT，25.12.0-rc1 → 25.12-SNAPSHOT
     local raw_version
     raw_version=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
-    version_number=$(echo "$raw_version" | sed 's/^\([0-9]*\.[0-9]*\).*/\1-SNAPSHOT/')
+    version_number="$raw_version"
 
-    local arch="aarch64_cortex-a53"
+    local arch="x86_64"
 
     if [ -d "$emortal_def_dir" ]; then
         # 始终覆盖 distfeeds.conf，确保 URL 最新
