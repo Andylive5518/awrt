@@ -24,10 +24,7 @@ update_feeds() {
     FEEDS_PATH=$(get_feeds_path)
     sed -i '/^#/d' "$FEEDS_PATH"
     sed -i '/packages_ext/d' "$FEEDS_PATH"
-    # sed -i '/[[:space:]]small8[[:space:]]/d' "$FEEDS_PATH"
     sed -i '/[[:space:]]custom_feed[[:space:]]/d' "$FEEDS_PATH"
-    # sed -i '/[[:space:]]passwall[[:space:]]/d' "$FEEDS_PATH"
-    # sed -i '/[[:space:]]nikki[[:space:]]/d' "$FEEDS_PATH"
 
     if [ ! -f "$BUILD_DIR/include/bpf.mk" ]; then
         touch "$BUILD_DIR/include/bpf.mk"
