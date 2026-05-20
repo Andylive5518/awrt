@@ -58,21 +58,6 @@ remove_unwanted_packages() {
             \rm -rf ./feeds/packages/utils/$pkg
         fi
     done
-
-    # if [[ -d ./feeds/small8 ]]; then
-    #     \rm -rf ./feeds/small8
-    # fi
-    # if [[ -d ./package/feeds/small8 ]]; then
-    #     \rm -rf ./package/feeds/small8
-    # fi
-
-    # if [[ -d ./package/istore ]]; then
-    #     \rm -rf ./package/istore
-    # fi
-
-    if [ -d "$BUILD_DIR/target/linux/qualcommax/base-files/etc/uci-defaults" ]; then
-        find "$BUILD_DIR/target/linux/qualcommax/base-files/etc/uci-defaults/" -type f -name "99*.sh" -exec rm -f {} +
-    fi
 }
 
 collect_missing_directories() {
@@ -295,27 +280,6 @@ check_default_settings() {
             rm -rf "$tmp_dir"
             exit 1
         fi
-    fi
-}
-
-add_ax6600_led() {
-    local athena_led_dir="$BUILD_DIR/package/emortal/luci-app-athena-led"
-    local repo_url="https://github.com/NONGFAH/luci-app-athena-led.git"
-
-    echo "正在添加 luci-app-athena-led..."
-    rm -rf "$athena_led_dir" 2>/dev/null
-
-    if ! git clone --depth=1 "$repo_url" "$athena_led_dir"; then
-        echo "错误：从 $repo_url 克隆 luci-app-athena-led 仓库失败" >&2
-        exit 1
-    fi
-
-    if [ -d "$athena_led_dir" ]; then
-        chmod +x "$athena_led_dir/root/usr/sbin/athena-led"
-        chmod +x "$athena_led_dir/root/etc/init.d/athena_led"
-    else
-        echo "错误：克隆操作后未找到目录 $athena_led_dir" >&2
-        exit 1
     fi
 }
 
