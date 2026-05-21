@@ -72,8 +72,9 @@ main() {
     update_lucky
     fix_rust_compile_error
     # update_smartdns
-    update_diskman
-    update_dockerman
+    # update_diskman
+    # update_dockerman
+    update_dockerman_mirrors
     set_nginx_default_config
     update_uwsgi_limit_as
     update_argon
@@ -94,7 +95,7 @@ main() {
     update_geoip
     fix_openssl_ktls
     fix_opkg_check
-    # fix_netfilter_kmod_clash
+    fix_netfilter_kmod_clash
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc

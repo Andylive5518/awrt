@@ -182,7 +182,7 @@ install_custom_feed() {
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix \
-        luci-lib-docker luci-app-dockerman
+        luci-lib-docker luci-app-dockerman luci-app-diskman
     )
     local required_feed_dirs=(
         v2ray-core v2ray-geodata adguardhome
@@ -528,14 +528,12 @@ update_dockerman() {
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
         fi
 
-        update_dockerman_mirrors "$path"
-
         echo "dockerman 更新完成"
     fi
 }
 
 update_dockerman_mirrors() {
-    local path="$1"
+    local path="$(get_custom_feed_worktree_dir)/luci-app-dockerman"
     local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
     if [ -f "$cfg_lua" ]; then
         sed -i '/hub-mirror\.c\.163\.com/c\
