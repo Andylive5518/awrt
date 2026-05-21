@@ -175,13 +175,14 @@ install_custom_feed() {
         tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
         v2dat luci-app-adguardhome ddns-go luci-app-iperf3-server \
         luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
-        luci-app-quickstart luci-app-istorex cdnspeedtest luci-app-cloudflarespeedtest netdata luci-app-netdata \
+        luci-app-quickstart luci-app-istorex netdata luci-app-netdata \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo mihomo-meta \
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
-        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix
+        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix \
+        luci-lib-docker luci-app-dockerman
     )
     local required_feed_dirs=(
         v2ray-core v2ray-geodata adguardhome
@@ -527,16 +528,21 @@ update_dockerman() {
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
         fi
 
-        local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
-        if [ -f "$cfg_lua" ]; then
-            sed -i '/hub-mirror\.c\.163\.com/c\
+        update_dockerman_mirrors "$path"
+
+        echo "dockerman 更新完成"
+    fi
+}
+
+update_dockerman_mirrors() {
+    local path="$1"
+    local cfg_lua="$path/luasrc/model/cbi/dockerman/configuration.lua"
+    if [ -f "$cfg_lua" ]; then
+        sed -i '/hub-mirror\.c\.163\.com/c\
 o:value("https://docker.1ms.run", "https://docker.1ms.run")\
 o:value("https://docker.xuanyuan.me", "https://docker.xuanyuan.me")\
 o:value("https://docker.m.daocloud.io", "https://docker.m.daocloud.io")' "$cfg_lua"
-            echo "dockerman registry_mirrors 预设值已更换为国内加速站"
-        fi
-
-        echo "dockerman 更新完成"
+        echo "dockerman registry_mirrors 预设值已更换为国内加速站"
     fi
 }
 
