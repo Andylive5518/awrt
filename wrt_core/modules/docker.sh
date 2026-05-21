@@ -362,6 +362,7 @@ _docker_stack_init_supports_nftables_backend() {
         && grep -Fq 'verify_nftables_swarm_is_disabled "${data_root}" || return 1' "$dockerd_init" \
         && grep -Fq 'verify_nftables_forwarding || return 1' "$dockerd_init" \
         && grep -Fq 'verify_nftables_prerequisites "${data_root}" || return 1' "$dockerd_init" \
+        && grep -Fq 'ensure_docker_nftables_nat' "$dockerd_init" \
         && grep -Fq 'nft add rule inet "${NFT_DOCKER_USER_TABLE}" "${NFT_DOCKER_USER_CHAIN}" iifname "${inbound}" oifname "${outbound}" reject' "$dockerd_init"
 }
 
@@ -448,6 +449,16 @@ _docker_stack_patch_nft_prereq_block() {
                 print ""
                 print "\tverify_nftables_swarm_is_disabled \"${data_root}\" || return 1"
                 print "\tverify_nftables_forwarding || return 1"
+                print "}"
+                print ""
+                print "ensure_docker_nftables_nat() {"
+                print "\t# 验证 nftables 基础可用性。Docker nftables backend"
+                print "\t# 自行管理 NAT 规则，此处仅做基础检查。"
+                print "\tnft --version >/dev/null 2>&1 || {"
+                print "\t\tlogger -t \"dockerd-init\" -p err \"nftables is not available; Docker nftables backend will not work\""
+                print "\t\treturn 1"
+                print "\t}"
+                print "\treturn 0"
                 print "}"
                 print "# === DOCKER_STACK_NFT_PREREQ_END ==="
             }
@@ -865,8 +876,12 @@ docker_stack_sync_nftables_compat() {
     # kernel 6.6（ImmortalWrt 24.10）上 iptables-legacy 和 nftables 和平共存，
     # 官方 dockerd 依赖 kmod-ipt-nat / iptables-mod-extra 全家桶，正常工作。
     # nftables 迁移方案（替换 DEPENDS + 修改 init 脚本）仅 kernel 6.18+ 需要。
+    #
+    # 内核版本从 include/kernel-X.Y 文件中提取 LINUX_VERSION-X.Y 行，格式固定：
+    #   LINUX_VERSION-6.6 = .133   → 版本 6.6
+    #   LINUX_VERSION-6.18 = .xxx  → 版本 6.18
     local kv
-    kv=$(awk -F'[ .=]' '/^LINUX_KERNEL_HASH/ {next} /^LINUX_VERSION-/{v=$2; if(v<7)v+=3; printf "%d.%d",v,$3; exit}' "$build_dir/include/kernel-version.mk" 2>/dev/null)
+    kv=$(sed -n 's/^LINUX_VERSION-\([0-9]\+\.[0-9]\+\).*/\1/p' "$build_dir"/include/kernel-* 2>/dev/null | head -1)
     if [ -n "$kv" ]; then
         local kmajor=${kv%%.*}
         local kminor=${kv#*.}
