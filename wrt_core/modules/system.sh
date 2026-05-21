@@ -268,9 +268,15 @@ install_opkg_distfeeds() {
     local ver_file="$BUILD_DIR/include/version.mk"
 
     local version_number
-    # ipq60xx 用 SNAPSHOT：24.10.6 → 24.10-SNAPSHOT，25.12.0-rc1 → 25.12-SNAPSHOT
     local raw_version
-    raw_version=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
+
+    raw_version=$(sed -n 's/^VERSION_NUMBER:=.*,\([^)]*\))$/\1/p' "$ver_file" | tail -1)
+
+    if ! echo "$raw_version" | grep -q '^[0-9]'; then
+        echo "[opkg] version.mk 版本号为非数字（${raw_version}），跳过 distfeeds 生成"
+        return 0
+    fi
+
     version_number=$(echo "$raw_version" | sed 's/^\([0-9]*\.[0-9]*\).*/\1-SNAPSHOT/')
 
     if [ -d "$emortal_def_dir" ]; then
@@ -293,28 +299,10 @@ EOF
 sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
         fi
 
-        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: aarch64_cortex-a53, raw: ${raw_version})"
-    fi
-
-    # 修复 ImmortalWrt build system 生成的 distfeeds 模板中未展开的变量
-    # find 范围覆盖 package/ include/ scripts/ feeds/ — 模板可能在 feeds 中
-    if [ -n "$version_number" ]; then
-        local fixed=0
-        while IFS= read -r -d '' f; do
-            sed -i 's|$(call qstrip,$(CONFIG_VERSION_NUMBER))|'"${version_number}"'|g' "$f"
-            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
-            fixed=1
-        done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
-            -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
-            -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
-
-        if [ "$fixed" = "1" ]; then
-            echo "[opkg] distfeeds 模板已修复：${version_number} (arch: aarch64_cortex-a53)"
-        fi
+        echo "[opkg] distfeeds 已生成：${version_number} (arch: aarch64_cortex-a53)"
     fi
 
     # 修复 99-default-settings-chinese 中的 opkg/apk mirror 默认值
-    # 该文件没有扩展名，上面的 find *.conf|*.mk|*.sh 匹配不到
     local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
     if [ -f "$chn_settings" ]; then
         sed -i 's|https://mirrors\.vsean\.net/openwrt|https://downloads.immortalwrt.org|g' "$chn_settings"
@@ -476,8 +464,8 @@ update_oaf_deconfig() {
     appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
     local uci_defs
     uci_defs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
-    local disable_dirs
-    disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
+    # local disable_dirs
+    # disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
 
     # 修改 appfilter.config
     if [ -n "$appfilter_confs" ]; then
@@ -502,22 +490,22 @@ update_oaf_deconfig() {
         done <<< "$uci_defs"
     fi
 
-    # 创建 99_disable_oaf
-    if [ -n "$disable_dirs" ]; then
-        while IFS= read -r disable_dir; do
-            [ -n "$disable_dir" ] && [ -d "$disable_dir" ] || continue
-            local disable_path="$disable_dir/99_disable_oaf"
-            cat >"$disable_path" <<-'EOF'
-#!/bin/sh
-[ "$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
-    /etc/init.d/appfilter disable
-    /etc/init.d/appfilter stop
-}
-EOF
-            chmod +x "$disable_path"
-            echo "[OAF] 99_disable_oaf created — $disable_path"
-        done <<< "$disable_dirs"
-    fi
+#     # 创建 99_disable_oaf
+#     if [ -n "$disable_dirs" ]; then
+#         while IFS= read -r disable_dir; do
+#             [ -n "$disable_dir" ] && [ -d "$disable_dir" ] || continue
+#             local disable_path="$disable_dir/99_disable_oaf"
+#             cat >"$disable_path" <<-'EOF'
+# #!/bin/sh
+# [ "$(uci get appfilter.global.enable 2>/dev/null)" = "0" ] && {
+#     /etc/init.d/appfilter disable
+#     /etc/init.d/appfilter stop
+# }
+# EOF
+#             chmod +x "$disable_path"
+#             echo "[OAF] 99_disable_oaf created — $disable_path"
+#         done <<< "$disable_dirs"
+#     fi
 }
 
 update_geoip() {

@@ -182,7 +182,7 @@ install_custom_feed() {
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix \
-        luci-lib-docker luci-app-dockerman luci-app-diskman
+        luci-lib-docker luci-app-dockerman luci-app-diskman smartdns luci-app-smartdns
     )
     local required_feed_dirs=(
         v2ray-core v2ray-geodata adguardhome
@@ -416,6 +416,14 @@ update_lucky() {
     fi
 }
 
+patch_smartdns() {
+    local SMARTDNS_DIR="$(get_custom_feed_worktree_dir)/smartdns"
+
+    echo "正在给 smartdns 打补丁..."
+    install -Dm644 "$BASE_PATH/patches/100-smartdns-optimize.patch" "$SMARTDNS_DIR/patches/100-smartdns-optimize.patch"
+    sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
+}
+
 update_smartdns() {
     local SMARTDNS_REPO="https://github.com/ZqinKing/openwrt-smartdns.git"
     local SMARTDNS_DIR="$BUILD_DIR/feeds/packages/net/smartdns"
@@ -428,9 +436,6 @@ update_smartdns() {
         echo "错误：从 $SMARTDNS_REPO 克隆 smartdns 仓库失败" >&2
         exit 1
     fi
-
-    install -Dm644 "$BASE_PATH/patches/100-smartdns-optimize.patch" "$SMARTDNS_DIR/patches/100-smartdns-optimize.patch"
-    sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
 
     echo "正在更新 luci-app-smartdns..."
     rm -rf "$LUCI_APP_SMARTDNS_DIR"

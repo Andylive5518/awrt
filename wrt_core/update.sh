@@ -74,6 +74,7 @@ main() {
     # update_smartdns
     # update_diskman
     # update_dockerman
+    patch_smartdns
     update_dockerman_mirrors
     set_nginx_default_config
     update_uwsgi_limit_as
