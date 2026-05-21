@@ -65,8 +65,9 @@ main() {
     update_lucky
     fix_rust_compile_error
     update_smartdns
-    update_diskman
+    # update_diskman
     # update_dockerman
+    update_dockerman_mirrors
     set_nginx_default_config
     update_uwsgi_limit_as
     update_argon
