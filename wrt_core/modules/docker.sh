@@ -873,9 +873,9 @@ docker_stack_sync_nftables_compat() {
 
     build_dir=$(_docker_stack_normalize_build_dir "$build_dir")
 
-    # kernel 6.6（ImmortalWrt 24.10）上 iptables-legacy 和 nftables 和平共存，
-    # 官方 dockerd 依赖 kmod-ipt-nat / iptables-mod-extra 全家桶，正常工作。
-    # nftables 迁移方案（替换 DEPENDS + 修改 init 脚本）仅 kernel 6.18+ 需要。
+    # kernel 6.6+（ImmortalWrt 24.10+）上 nftables 完全可用且是系统防火墙
+    # （fw4）的默认后端。对 kernel 6.6 也执行 nftables 迁移，确保 dockerd 使用
+    # nftables 后端，避免 iptables-legacy 规则与 fw4 冲突导致防火墙警告。
     #
     # 内核版本从 include/kernel-X.Y 文件中提取 LINUX_VERSION-X.Y 行，格式固定：
     #   LINUX_VERSION-6.6 = .133   → 版本 6.6
@@ -885,8 +885,8 @@ docker_stack_sync_nftables_compat() {
     if [ -n "$kv" ]; then
         local kmajor=${kv%%.*}
         local kminor=${kv#*.}
-        if [ "$kmajor" -lt 6 ] || { [ "$kmajor" -eq 6 ] && [ "${kminor:-0}" -lt 12 ]; }; then
-            echo "kernel $kv < 6.12 — 跳过了 nftables 迁移，保留官方 iptables-legacy 依赖"
+        if [ "$kmajor" -lt 5 ] || { [ "$kmajor" -eq 5 ] && [ "${kminor:-0}" -lt 4 ]; }; then
+            echo "kernel $kv < 5.4 — 跳过了 nftables 迁移（nftables 不可用或不可靠）"
             return 0
         fi
     fi
