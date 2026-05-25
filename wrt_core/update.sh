@@ -42,6 +42,7 @@ main() {
     remove_unwanted_packages
     remove_tweaked_packages
     install_custom_feed
+    fix_argon_wget_depends
     # update_homeproxy
     # fix_default_set
     # fix_miniupnpd

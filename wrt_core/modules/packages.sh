@@ -182,7 +182,7 @@ install_custom_feed() {
         luci-theme-argon luci-app-argon-config
     )
     local required_feed_dirs=(
-        v2ray-core v2ray-geodata adguardhome luci-app-quickfile
+        v2ray-core v2ray-geodata luci-app-quickfile
     )
     local custom_feed_sources=()
     local missing_feed_dirs=()
@@ -202,7 +202,7 @@ install_custom_feed() {
 
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
-        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata adguardhome luci-app-quickfile"
+        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata luci-app-quickfile"
     )
 
     feeds_path=$(get_feeds_path)
@@ -295,6 +295,19 @@ update_homeproxy() {
         if ! git clone --depth 1 "$repo_url" "$target_dir"; then
             echo "错误：从 $repo_url 克隆 homeproxy 仓库失败" >&2
             exit 1
+        fi
+    fi
+}
+
+fix_argon_wget_depends() {
+    # 修复：luci-theme-argon 的 wget-any 虚拟包在 ImmortalWrt 24.10 中不存在
+    # 上游原版用的是 +wget，kiddin9/op-packages 改成了 +wget-any 导致依赖无法满足
+    local argon_mk="$(get_custom_feed_worktree_dir)/luci-theme-argon/Makefile"
+    if [ -f "$argon_mk" ]; then
+        if grep -q 'wget-any' "$argon_mk"; then
+            echo "正在修复 luci-theme-argon 的 wget-any 依赖..."
+            sed -i 's/+wget-any/+wget/' "$argon_mk"
+            echo "luci-theme-argon 依赖修复完成"
         fi
     fi
 }
