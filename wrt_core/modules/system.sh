@@ -321,9 +321,6 @@ update_oaf_deconfig() {
             fi
         done <<< "$uci_defs"
     fi
-
-    # 不再创建 99_disable_oaf。oafd 需保持运行以提供 ubus 接口（LuCI 版本显示依赖），
-    # auto_load_engine='0' 已保证不加载内核模块，enable='0' 保证不做过滤。
 }
 
 update_geoip() {

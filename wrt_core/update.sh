@@ -42,58 +42,58 @@ main() {
     remove_unwanted_packages
     remove_tweaked_packages
     install_custom_feed
-    update_homeproxy
-    fix_default_set
-    fix_miniupnpd
+    # update_homeproxy
+    # fix_default_set
+    # fix_miniupnpd
     update_golang
-    change_dnsmasq2full
+    # change_dnsmasq2full
     update_default_lan_addr
-    change_cpuusage
-    update_tcping
-    set_custom_task
-    apply_passwall_tweaks
+    # change_cpuusage
+    # update_tcping
+    # set_custom_task
+    # apply_passwall_tweaks
     set_build_signature
     update_menu_location
-    fix_compile_coremark
-    update_dnsmasq_conf
-    add_backup_info_to_sysupgrade
-    update_mosdns_deconfig
-    fix_quickstart
+    # fix_compile_coremark
+    # update_dnsmasq_conf
+    # add_backup_info_to_sysupgrade
+    # update_mosdns_deconfig
+    # fix_quickstart
     update_oaf_deconfig
-    add_timecontrol
-    add_quickfile
-    update_lucky
-    fix_rust_compile_error
-    update_smartdns
+    # add_timecontrol
+    # add_quickfile
+    # update_lucky
+    # fix_rust_compile_error
+    # update_smartdns
     # update_diskman
     # update_dockerman
     update_dockerman_mirrors
-    set_nginx_default_config
-    update_uwsgi_limit_as
-    update_argon
-    update_nginx_ubus_module
-    check_default_settings
+    # set_nginx_default_config
+    # update_uwsgi_limit_as
+    # update_argon
+    # update_nginx_ubus_module
+    # check_default_settings
     install_opkg_distfeeds
     fix_bandix_default_enabled
-    fix_easytier_mk
+    # fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
     verify_custom_feed_installed_paths
-    docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
-    fix_cups_libcups_avahi_depends
-    fix_easytier_lua
-    update_adguardhome
-    update_script_priority
+    # docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
+    # fix_cups_libcups_avahi_depends
+    # fix_easytier_lua
+    # update_adguardhome
+    # update_script_priority
     update_geoip
-    fix_openssl_ktls
-    fix_opkg_check
+    # fix_openssl_ktls
+    # fix_opkg_check
     # fix_netfilter_kmod_clash
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
     enable_ttyd_autologin
-    fix_nikki_gobinpackage
+    # fix_nikki_gobinpackage
     fix_pbr_ip_forward
 }
 
