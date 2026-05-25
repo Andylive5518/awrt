@@ -202,7 +202,7 @@ install_custom_feed() {
 
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
-        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata adguardhome"
+        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata adguardhome luci-app-quickfile"
     )
 
     feeds_path=$(get_feeds_path)
