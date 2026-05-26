@@ -28,7 +28,7 @@ remove_unwanted_packages() {
     )
     local packages_net=(
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
-        "mosdns" "adguardhome" "ddns-go" "naiveproxy" "shadowsocks-rust"
+        "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust"
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
         "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
@@ -246,8 +246,8 @@ verify_custom_feed_installed_paths() {
     local custom_feed_name
     local custom_feed_package_dir
     local required_package_dirs=(
-        luci-app-adguardhome luci-app-mosdns v2ray-geodata luci-app-easytier
-        luci-app-passwall nikki luci-app-nikki
+        adguardhome luci-app-adguardhome luci-app-mosdns luci-app-easytier
+        luci-app-passwall nikki luci-app-nikki v2ray-core v2ray-geodata luci-app-quickfile
     )
     local missing_package_dirs=()
 
