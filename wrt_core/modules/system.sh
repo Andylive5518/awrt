@@ -7,8 +7,10 @@ fix_default_set() {
 
     install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
     install -Dm544 "$BASE_PATH/patches/991_custom_settings" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/991_custom_settings"
-    install -Dm544 "$BASE_PATH/patches/992_set-wifi-uci.sh" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/992_set-wifi-uci.sh"
+    # install -Dm544 "$BASE_PATH/patches/992_set-wifi-uci.sh" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/992_set-wifi-uci.sh"
     install -Dm544 "$BASE_PATH/patches/993_ddns-go-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/993_ddns-go-config"
+    install -Dm544 "$BASE_PATH/patches/994_adguardhome-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/994_adguardhome-config"
+    install -Dm544 "$BASE_PATH/patches/995_pbr_isp_config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/995_pbr_isp_config"
 
     if [ -f "$BUILD_DIR/package/emortal/autocore/files/tempinfo" ]; then
         if [ -f "$BASE_PATH/patches/tempinfo" ]; then
@@ -467,9 +469,7 @@ install_pbr_isp() {
 
     local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
     local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
-    local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
     local pbr_makefile="$pbr_pkg_dir/Makefile"
-    local tmp_rules
 
     if [ ! -d "$pbr_pkg_dir" ]; then
         echo "错误：PBR 包目录不存在: $pbr_pkg_dir" >&2
@@ -480,34 +480,18 @@ install_pbr_isp() {
     install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}" "$pbr_dir/pbr.user.${isp_lower}"
     install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}6" "$pbr_dir/pbr.user.${isp_lower}6"
 
+    # Makefile: 在 endef 前插入 INSTALL_DATA 规则（endef 是 Makefile 固定关键字，比具体文件名锚点更稳定）
     if [ -f "$pbr_makefile" ] && ! grep -q "pbr.user.${isp_lower}" "$pbr_makefile"; then
         echo "正在修改 PBR Makefile 添加 $isp_upper 安装规则..."
-        tmp_rules=$(mktemp)
-        printf '\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s $(1)/usr/share/pbr/pbr.user.%s\n' \
-            "$isp_lower" "$isp_lower" > "$tmp_rules"
-        printf '\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s6 $(1)/usr/share/pbr/pbr.user.%s6\n' \
-            "$isp_lower" "$isp_lower" >> "$tmp_rules"
-        sed -i "/pbr\.user\.netflix.*\$(1)/r $tmp_rules" "$pbr_makefile"
-        rm -f "$tmp_rules"
-    fi
-
-    if [ -f "$pbr_conf" ] && ! grep -q "pbr.user.${isp_lower}" "$pbr_conf"; then
-        echo "正在添加 PBR $isp_upper 配置条目..."
-        tmp_rules=$(mktemp)
-        cat > "$tmp_rules" << PBRCONFEOF
-
-config include
-	option path '/usr/share/pbr/pbr.user.${isp_lower}'
-	option enabled '0'
-
-config include
-	option path '/usr/share/pbr/pbr.user.${isp_lower}6'
-	option enabled '0'
-PBRCONFEOF
-        sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
-/option enabled '0'/r $tmp_rules
-}" "$pbr_conf"
-        rm -f "$tmp_rules"
+        local tmp_mk=$(mktemp)
+        awk -v isp="$isp_lower" '
+            /^endef$/ && !done {
+                printf "\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s $(1)/usr/share/pbr/pbr.user.%s\n", isp, isp
+                printf "\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s6 $(1)/usr/share/pbr/pbr.user.%s6\n", isp, isp
+                done = 1
+            }
+            { print }
+        ' "$pbr_makefile" > "$tmp_mk" && mv "$tmp_mk" "$pbr_makefile"
     fi
 }
 

@@ -1,0 +1,22 @@
+#!/bin/sh
+# 为 luci-app-adguardhome 补充 UCI 认证配置
+# luci 读取的字段名因版本而异（username 或 web_username），两侧都设
+# 位置排在 994，在 AdGuardHome 包自带的 uci-defaults 之后执行
+
+[ -f /etc/config/adguardhome ] || exit 0
+
+if ! uci -q get adguardhome.config.web_username >/dev/null 2>&1; then
+    uci -q set adguardhome.config.web_username='admin'
+fi
+if ! uci -q get adguardhome.config.web_password >/dev/null 2>&1; then
+    uci -q set adguardhome.config.web_password='admin'
+fi
+if ! uci -q get adguardhome.config.username >/dev/null 2>&1; then
+    uci -q set adguardhome.config.username='admin'
+fi
+if ! uci -q get adguardhome.config.password >/dev/null 2>&1; then
+    uci -q set adguardhome.config.password='admin'
+fi
+
+uci commit adguardhome
+exit 0
