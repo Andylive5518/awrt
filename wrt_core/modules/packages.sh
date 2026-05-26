@@ -246,8 +246,8 @@ verify_custom_feed_installed_paths() {
     local custom_feed_name
     local custom_feed_package_dir
     local required_package_dirs=(
-        adguardhome luci-app-adguardhome luci-app-mosdns luci-app-easytier
-        luci-app-passwall nikki luci-app-nikki v2ray-core v2ray-geodata luci-app-quickfile
+        luci-app-adguardhome luci-app-mosdns luci-app-easytier
+        luci-app-passwall luci-app-nikki v2ray-core v2ray-geodata luci-app-quickfile
     )
     local missing_package_dirs=()
 
