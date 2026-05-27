@@ -480,16 +480,19 @@ install_pbr_isp() {
     install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}" "$pbr_dir/pbr.user.${isp_lower}"
     install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}6" "$pbr_dir/pbr.user.${isp_lower}6"
 
-    # Makefile: 在 endef 前插入 INSTALL_DATA 规则（endef 是 Makefile 固定关键字，比具体文件名锚点更稳定）
+    # Makefile: 在 Package/pbr/install 段的 endef 前插入 INSTALL_DATA 规则
+    # 注意：pbr Makefile 有多个 define...endef 块，必须只匹配 install 段的 endef
     if [ -f "$pbr_makefile" ] && ! grep -q "pbr.user.${isp_lower}" "$pbr_makefile"; then
         echo "正在修改 PBR Makefile 添加 $isp_upper 安装规则..."
         local tmp_mk=$(mktemp)
         awk -v isp="$isp_lower" '
-            /^endef$/ && !done {
+            /^define Package\/pbr\/install$/ { in_install = 1 }
+            in_install && /^endef$/ && !done {
                 printf "\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s $(1)/usr/share/pbr/pbr.user.%s\n", isp, isp
                 printf "\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.%s6 $(1)/usr/share/pbr/pbr.user.%s6\n", isp, isp
                 done = 1
             }
+            /^endef$/ { in_install = 0 }
             { print }
         ' "$pbr_makefile" > "$tmp_mk" && mv "$tmp_mk" "$pbr_makefile"
     fi
