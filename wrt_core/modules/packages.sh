@@ -24,7 +24,7 @@ remove_unwanted_packages() {
         "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome" "luci-app-diskman"
         "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker"
         "luci-app-dockerman" "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
-        "luci-app-autoreboot" "luci-app-microsocks" "luci-app-smartdns"
+        "luci-app-autoreboot" "luci-app-microsocks"
     )
     local packages_net=(
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
@@ -32,7 +32,7 @@ remove_unwanted_packages() {
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
         "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
-        "microsocks" "tuic-server" "shadow-tls" "smartdns"
+        "microsocks" "tuic-server" "shadow-tls"
     )
     local packages_utils=(
         "cups" "coremark"
@@ -178,7 +178,7 @@ install_custom_feed() {
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix \
-        luci-lib-docker luci-app-dockerman luci-app-diskman smartdns luci-app-smartdns \
+        luci-lib-docker luci-app-dockerman luci-app-diskman \
         luci-theme-argon luci-app-argon-config
     )
     local required_feed_dirs=(
@@ -406,7 +406,7 @@ update_lucky() {
 }
 
 update_smartdns() {
-    local SMARTDNS_REPO="https://github.com/ZqinKing/openwrt-smartdns.git"
+    local SMARTDNS_REPO="https://github.com/pymumu/openwrt-smartdns.git"
     local SMARTDNS_DIR="$BUILD_DIR/feeds/packages/net/smartdns"
     local LUCI_APP_SMARTDNS_REPO="https://github.com/pymumu/luci-app-smartdns.git"
     local LUCI_APP_SMARTDNS_DIR="$BUILD_DIR/feeds/luci/applications/luci-app-smartdns"
