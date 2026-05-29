@@ -306,18 +306,19 @@ update_oaf_deconfig() {
         while IFS= read -r appfilter_conf; do
             [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
             sed -i -e "s/record_enable '1'/record_enable '0'/g" \
-                   -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" "$appfilter_conf"
-            echo "[OAF] auto_load_engine=0, record_enable=0 — $appfilter_conf"
+                   -e "s/auto_load_engine '[01]'/auto_load_engine '1'/g" "$appfilter_conf"
+            echo "[OAF] auto_load_engine=1, record_enable=0 — $appfilter_conf"
         done <<< "$appfilter_confs"
     fi
 
-    # 修改 94_feature_3.0，删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
+    # 修改 94_feature_3.0，删除 disable_hnat，防止首次启动覆盖配置
+    # x86_64: auto_load_engine 保留（已在 appfilter.config 中设为 '1'）
     if [ -n "$uci_defs" ]; then
         while IFS= read -r uci_def; do
             [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
-            if grep -q 'disable_hnat\|auto_load_engine' "$uci_def" 2>/dev/null; then
-                sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
-                echo "[OAF] uci_def: removed disable_hnat + auto_load_engine — $uci_def"
+            if grep -q 'disable_hnat' "$uci_def" 2>/dev/null; then
+                sed -i '/disable_hnat/d' "$uci_def"
+                echo "[OAF] uci_def: removed disable_hnat — $uci_def"
             else
                 echo "[OAF] uci_def: already clean — $uci_def"
             fi
