@@ -1,9 +1,19 @@
 #!/bin/sh
-# 为 luci-app-adguardhome 补充 UCI 认证配置
+# 为 luci-app-adguardhome 补充 UCI 认证配置并修正 config 路径
 # luci 读取的字段名因版本而异（username 或 web_username），两侧都设
 # 位置排在 994，在 AdGuardHome 包自带的 uci-defaults 之后执行
+#
+# 注意：包默认 config 路径是 /etc/adguardhome.yaml，会触发 init 脚本拒绝：
+#   "AdGuard Home config must be stored in its own directory, and not in /etc"
+# 修正为 /etc/adguardhome/adguardhome.yaml
 
 [ -f /etc/config/adguardhome ] || exit 0
+
+# 修正 config 路径（包默认 /etc/adguardhome.yaml 会导致启动失败）
+current_config=$(uci -q get adguardhome.config.config 2>/dev/null)
+if [ "$current_config" = "/etc/adguardhome.yaml" ] || [ -z "$current_config" ]; then
+    uci -q set adguardhome.config.config='/etc/adguardhome/adguardhome.yaml'
+fi
 
 if ! uci -q get adguardhome.config.web_username >/dev/null 2>&1; then
     uci -q set adguardhome.config.web_username='admin'

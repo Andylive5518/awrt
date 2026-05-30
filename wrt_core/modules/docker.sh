@@ -551,10 +551,11 @@ _docker_stack_patch_process_config_nftables() {
         mv "$tmp_path" "$dockerd_init"
     fi
 
-    if ! grep -Fq 'json_add_string "firewall-backend" "${firewall_backend}"' "$dockerd_init"; then
-        sed -i '/^[[:space:]]*json_add_string "log-level" "${log_level}"$/a\	json_add_string "firewall-backend" "${firewall_backend}"' "$dockerd_init"
-    fi
-
+    # firewall_backend 是 UCI 变量，决定 init 脚本内部走 iptables 还是 nftables 路径。
+    # 它 NOT Docker daemon 有效配置项，禁止写入 daemon.json。
+    # 写入 daemon.json 会导致 Docker 拒绝启动：
+    #   "unable to configure the Docker daemon with file daemon.json: 
+    #    the following directives don't match any configuration option: firewall-backend"
     if ! grep -Fq 'BLOCKING_RULE_ERROR=0' "$dockerd_init"; then
         tmp_path=$(mktemp) || {
             echo "错误：创建临时文件失败" >&2
