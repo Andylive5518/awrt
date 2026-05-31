@@ -29,6 +29,11 @@ mkdir -p /etc/capabilities
 }
 CAPEOF
 
+# --- 确保工作目录存在 ---
+# AdGuardHome 二进制编译时硬编码了 /tmp/lib/adguardhome 路径
+mkdir -p /tmp/lib/adguardhome /var/lib/adguardhome
+chown -R adguardhome:adguardhome /tmp/lib/adguardhome /var/lib/adguardhome 2>/dev/null
+
 # --- 修正 config 路径（包默认 /etc/adguardhome.yaml 会导致启动失败）---
 current_config=$(uci -q get adguardhome.config.config 2>/dev/null)
 if [ "$current_config" = "/etc/adguardhome.yaml" ] || [ -z "$current_config" ]; then
