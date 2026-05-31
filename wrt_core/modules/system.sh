@@ -372,6 +372,17 @@ fix_easytier_mk() {
     fi
 }
 
+# Docker 菜单排序：LuCI 24.10 中字符串 "40" 和数字 40 排序不同
+# 包默认 "order": "40"（字符串）被排到所有数字order之后（即最后）
+# 改为数字 40，和 NAS 同值靠字母序排在前面
+fix_dockerman_menu_order() {
+    local json_path="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/luci/menu.d/luci-app-dockerman.json"
+    if [ -f "$json_path" ]; then
+        sed -i 's/"order": "40"/"order": 40/' "$json_path"
+        echo "[menu] dockerman order 字符串→数字 40（排在 NAS 上面）"
+    fi
+}
+
 update_nginx_ubus_module() {
     local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
     local source_date="2024-03-02"
