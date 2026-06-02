@@ -391,12 +391,9 @@ fix_adguardhome_rpcd() {
     script="$(get_custom_feed_worktree_dir)/luci-app-adguardhome/root/usr/libexec/rpcd/luci.adguardhome"
     [ -f "$script" ] || { echo "[adguardhome] rpcd script not found, skip"; return 0; }
 
-    # 修复 1: curl -w 多余的 }
-    sed -i 's/"%{http_code}}"/"%{http_code}"/' "$script"
-    # 修复 2: hostname → LAN IP（dnsmasq 不解析 ImmortalWrt.lan）
-    sed -i '/^\[\[ "\${HOST}" == "0.0.0.0" \]\] && HOST=/c\[[ "${HOST}" == "0.0.0.0" ] \&\& HOST=$(uci get network.lan.ipaddr 2>/dev/null)' "$script"
-
-    echo "[adguardhome] rpcd script patched"
+    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/995-adguardhome-rpcd.patch" && \
+        echo "[adguardhome] rpcd script patched" || \
+        echo "[adguardhome] rpcd patch failed"
 }
 
 update_nginx_ubus_module() {

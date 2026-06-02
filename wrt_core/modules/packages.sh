@@ -35,7 +35,7 @@ remove_unwanted_packages() {
         "microsocks" "tuic-server" "shadow-tls"
     )
     local packages_utils=(
-        "cups" "coremark"
+        "cups" "coremark" "dockerd" "containerd" "runc" "docker"
     )
 
     for pkg in "${luci_packages[@]}"; do
@@ -203,6 +203,7 @@ install_custom_feed() {
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
         "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata luci-app-quickfile"
+        "openwrt/packages-master|https://github.com/openwrt/packages.git|master|utils/dockerd utils/containerd utils/runc utils/docker"
     )
 
     feeds_path=$(get_feeds_path)
@@ -224,6 +225,13 @@ install_custom_feed() {
             rm -rf "$custom_feed_dir"
             return 1
         fi
+    done
+
+    # 修正 openwrt/packages master 的 golang include 路径
+    # master Makefiles 使用相对路径 ../../lang/golang/... 依赖同 feed 内的 golang
+    # 但 custom_feed 是 flat 结构没有 lang/ 子目录，需要改为 TOPDIR 绝对路径
+    for gomk in "$custom_feed_dir"/{dockerd,containerd,runc,docker}/Makefile; do
+        [ -f "$gomk" ] && sed -i 's|../../lang/golang/golang-package.mk|$(TOPDIR)/feeds/packages/lang/golang/golang-package.mk|g' "$gomk"
     done
 
     register_local_feed_source "$custom_feed_dir" "$feeds_path"

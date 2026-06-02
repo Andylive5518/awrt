@@ -1,0 +1,16 @@
+--- a/luci.adguardhome
++++ b/luci.adguardhome
+@@ -58,7 +58,7 @@ call_rest_api()
+ 	AGH_PASS=$(uci get adguardhome.config.web_password 2> /dev/null)
+ 	check_if_empty "Password not found in uci adguardhome" ${AGH_PASS} || exit 1
+-	CODE=$(curl --silent -L -k -u ${AGH_USER}:${AGH_PASS} ${PROTO}://${HOST}:${PORT}/control/$1 -o $TFILE -w "%{http_code}}")
++	CODE=$(curl --silent -L -k -u ${AGH_USER}:${AGH_PASS} ${PROTO}://${HOST}:${PORT}/control/$1 -o $TFILE -w "%{http_code}")
+ 	if [[ "${CODE}" == "200" ]]; then
+         cat $TFILE | tr -d '\n'
+ 	else
+@@ -89,7 +89,7 @@ HOST=${http_address%:*}
+-[[ "${HOST}" == "0.0.0.0" ]] && HOST=$(uci get system.@system[0].hostname).$(uci get dhcp.@dnsmasq[0].domain)
++[[ "${HOST}" == "0.0.0.0" ]] && HOST=$(uci get network.lan.ipaddr 2>/dev/null)
+ HOST=$(echo ${HOST} | awk '{print tolower($0)}')
+ PORT=${http_address##*:}
+ PROTO="http"
