@@ -383,6 +383,22 @@ fix_dockerman_menu_order() {
     fi
 }
 
+# 修复 luci-app-adguardhome 的 rpcd 脚本两个 bug：
+# 1. curl -w "%{http_code}}" 多了一个 } → status code 变成 "200}" 而非 "200"
+# 2. http_address=0.0.0.0 时拼 hostname.domain 做 URL，dnsmasq 不解析该域名 → 改用 LAN IP
+fix_adguardhome_rpcd() {
+    local script
+    script="$(get_custom_feed_worktree_dir)/luci-app-adguardhome/root/usr/libexec/rpcd/luci.adguardhome"
+    [ -f "$script" ] || { echo "[adguardhome] rpcd script not found, skip"; return 0; }
+
+    # 修复 1: curl -w 多余的 }
+    sed -i 's/"%{http_code}}"/"%{http_code}"/' "$script"
+    # 修复 2: hostname → LAN IP（dnsmasq 不解析 ImmortalWrt.lan）
+    sed -i '/^\[\[ "\${HOST}" == "0.0.0.0" \]\] && HOST=/c\[[ "${HOST}" == "0.0.0.0" ] \&\& HOST=$(uci get network.lan.ipaddr 2>/dev/null)' "$script"
+
+    echo "[adguardhome] rpcd script patched"
+}
+
 update_nginx_ubus_module() {
     local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
     local source_date="2024-03-02"

@@ -611,9 +611,10 @@ _docker_stack_patch_service_error_handling() {
 
     # rpcd 在 START=12 启动，比 dockerd (START=99) 早得多。
     # rpcd 启动时 docker ubus 对象因 Docker 未运行而注册失败 → dockerman LuCI 超时。
-    # dockerd boot() 完成后重启 rpcd 让其重新发现 Docker。
+    # boot() 和 start_service() 完成后都重启 rpcd 让其重新发现 Docker。
     if ! grep -Fq 'rpcd restart' "$dockerd_init"; then
-        sed -i '/^boot() {/,/^}/s/rc_procd start_service/rc_procd start_service\n\tsleep 3\n\t\/etc\/init.d\/rpcd restart/' "$dockerd_init"
+        sed -i '/^boot() {/,/^}/s/rc_procd start_service/rc_procd start_service\n\tsleep 5\n\t\/etc\/init.d\/rpcd restart/' "$dockerd_init"
+        sed -i '/^start_service() {/,/^}/s/procd_close_instance/procd_close_instance\n\tsleep 5\n\t\/etc\/init.d\/rpcd restart/' "$dockerd_init"
     fi
 }
 

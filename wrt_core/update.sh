@@ -76,6 +76,7 @@ main() {
     # check_default_settings
     install_opkg_distfeeds
     fix_dockerman_menu_order
+    fix_adguardhome_rpcd
     fix_bandix_default_enabled
     # fix_easytier_mk
     remove_attendedsysupgrade
