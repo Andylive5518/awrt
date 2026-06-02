@@ -1,14 +1,18 @@
---- a/luci.adguardhome
-+++ b/luci.adguardhome
-@@ -58,7 +58,7 @@ call_rest_api()
+--- a/luci.adguardhome	2026-06-02 17:06:52.000000000 +0800
++++ b/luci.adguardhome	2026-06-02 20:47:18.259909039 +0800
+@@ -57,7 +57,7 @@
+ 	check_if_empty "Username not found in uci adguardhome" ${AGH_USER} || exit 1
  	AGH_PASS=$(uci get adguardhome.config.web_password 2> /dev/null)
  	check_if_empty "Password not found in uci adguardhome" ${AGH_PASS} || exit 1
--	CODE=$(curl --silent -L -k -u ${AGH_USER}:${AGH_PASS} ${PROTO}://${HOST}:${PORT}/control/$1 -o $TFILE -w "%{http_code}}")
+-	CODE=$(curl --silent -L -k -u ${AGH_USER}:${AGH_PASS} ${PROTO}://${HOST}:${PORT}/control/$1 -o $TFILE -w "%{http_code"})
 +	CODE=$(curl --silent -L -k -u ${AGH_USER}:${AGH_PASS} ${PROTO}://${HOST}:${PORT}/control/$1 -o $TFILE -w "%{http_code}")
  	if [[ "${CODE}" == "200" ]]; then
          cat $TFILE | tr -d '\n'
  	else
-@@ -89,7 +89,7 @@ HOST=${http_address%:*}
+@@ -88,7 +88,7 @@
+ read_config > ${TFILE}
+ source ${TFILE}
+ HOST=${http_address%:*}
 -[[ "${HOST}" == "0.0.0.0" ]] && HOST=$(uci get system.@system[0].hostname).$(uci get dhcp.@dnsmasq[0].domain)
 +[[ "${HOST}" == "0.0.0.0" ]] && HOST=$(uci get network.lan.ipaddr 2>/dev/null)
  HOST=$(echo ${HOST} | awk '{print tolower($0)}')

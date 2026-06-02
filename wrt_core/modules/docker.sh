@@ -6,7 +6,9 @@ _docker_stack_resolve_component_makefile() {
     local candidate=""
 
     for candidate in \
+        "$build_dir/package/feeds/custom_feed/$component/Makefile" \
         "$build_dir/package/feeds/packages/$component/Makefile" \
+        "$build_dir/feeds/custom_feed/$component/Makefile" \
         "$build_dir/feeds/packages/utils/$component/Makefile"; do
         [ -f "$candidate" ] && {
             echo "$candidate"
@@ -24,7 +26,9 @@ _docker_stack_resolve_dockerd_file() {
     local candidate=""
 
     for candidate in \
+        "$build_dir/package/feeds/custom_feed/dockerd/$rel" \
         "$build_dir/package/feeds/packages/dockerd/$rel" \
+        "$build_dir/feeds/custom_feed/dockerd/$rel" \
         "$build_dir/feeds/packages/utils/dockerd/$rel"; do
         [ -f "$candidate" ] && {
             echo "$candidate"
