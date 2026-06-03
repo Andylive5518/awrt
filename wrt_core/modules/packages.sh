@@ -35,7 +35,7 @@ remove_unwanted_packages() {
         "microsocks" "tuic-server" "shadow-tls"
     )
     local packages_utils=(
-        "cups" "coremark" "dockerd" "containerd" "runc" "docker"
+        "cups" "coremark" "dockerd" "containerd" "runc" "docker" "tini"
     )
 
     for pkg in "${luci_packages[@]}"; do
@@ -203,7 +203,7 @@ install_custom_feed() {
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
         "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata luci-app-quickfile"
-        "openwrt/packages-master|https://github.com/openwrt/packages.git|master|utils/dockerd utils/containerd utils/runc utils/docker"
+        "openwrt/packages-master|https://github.com/immortalwrt/packages.git|master|utils/dockerd utils/containerd utils/runc utils/docker utils/tini"
     )
 
     feeds_path=$(get_feeds_path)
