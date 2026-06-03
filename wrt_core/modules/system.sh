@@ -400,7 +400,7 @@ fix_adguardhome_rpcd() {
 # 用 socket.poll 替代无限阻塞的 sock.recv，总超时 5 秒
 fix_dockerman_events_timeout() {
     local script
-    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/ucode/luci/controller/docker.uc"
+    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/ucode/controller/docker.uc"
     [ -f "$script" ] || { echo "[dockerman] docker.uc not found, skip"; return 0; }
 
     patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/996-dockerman-events-timeout.patch" && \
@@ -412,8 +412,7 @@ fix_dockerman_events_timeout() {
 # Docker 不发 chunked 终止块时不退出，加 8 秒总超时
 fix_dockerman_rpc_events_timeout() {
     local script
-    script="$(get_custom_feed_package_dir)/luci-lib-docker/luasrc/ucode/docker_rpc.uc"
-    [ -f "$script" ] || script="$(get_custom_feed_worktree_dir)/luci-lib-docker/root/usr/share/rpcd/ucode/docker_rpc.uc"
+    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc"
     [ -f "$script" ] || { echo "[dockerman-rpc] docker_rpc.uc not found, skip"; return 0; }
 
     patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/997-dockerman-rpc-events-timeout.patch" && \

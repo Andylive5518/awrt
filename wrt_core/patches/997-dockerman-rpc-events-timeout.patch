@@ -1,10 +1,11 @@
---- a/docker_rpc.uc
-+++ b/docker_rpc.uc
-@@ -35,17 +35,20 @@ const CLIENT_VER = '1';
+--- a/docker_rpc.uc	2026-06-02 21:19:48.000000000 +0800
++++ b/docker_rpc.uc	2026-06-03 23:17:47.939302546 +0800
+@@ -34,10 +34,12 @@
+ 
  function chunked_body_reader(sock, initial_buffer) {
  	let state = 0, chunklen = 0, buffer = initial_buffer || '';
 +	let deadline = time() + 8;
-
+ 
  	function poll_and_recv() {
 +		if (time() > deadline) return null;
  		let ready = socket.poll(POLL_TIMEOUT, [sock, socket.POLLIN]);
@@ -13,10 +14,12 @@
  		let data = sock.recv(BLOCKSIZE);
  		if (!data) return null;
  		buffer += data;
- 		return true;
+@@ -45,7 +47,7 @@
  	}
-
+ 
  	return () => {
 -		while (true) {
 +		while (time() < deadline) {
  			if (state === 0) {
+ 				let m = match(buffer, /^([0-9a-fA-F]+)\r\n/);
+ 				if (!m || length(m) < 2) {
