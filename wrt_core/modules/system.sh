@@ -191,7 +191,7 @@ update_menu_location() {
     fi
 
     # 代理类应用 services → vpn（JSON menu.d / controller lua 两种方式）
-    local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
+    local proxy_apps="homeproxy momo nikki"
     local app_feed="$(get_custom_feed_source_dir)"
     local app
     for app in $proxy_apps; do
@@ -394,6 +394,31 @@ fix_adguardhome_rpcd() {
     patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/995-adguardhome-rpcd.patch" && \
         echo "[adguardhome] rpcd script patched" || \
         echo "[adguardhome] rpcd patch failed"
+}
+
+# Docker 27+/29 的 /events 端点即使带 until 参数也不关闭连接（chunked 无终止符）
+# 用 socket.poll 替代无限阻塞的 sock.recv，总超时 5 秒
+fix_dockerman_events_timeout() {
+    local script
+    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/ucode/luci/controller/docker.uc"
+    [ -f "$script" ] || { echo "[dockerman] docker.uc not found, skip"; return 0; }
+
+    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/996-dockerman-events-timeout.patch" && \
+        echo "[dockerman] events timeout patched" || \
+        echo "[dockerman] events timeout patch failed"
+}
+
+# Docker rpcd 的 chunked_body_reader 有无限 while(true) 轮询
+# Docker 不发 chunked 终止块时不退出，加 8 秒总超时
+fix_dockerman_rpc_events_timeout() {
+    local script
+    script="$(get_custom_feed_package_dir)/luci-lib-docker/luasrc/ucode/docker_rpc.uc"
+    [ -f "$script" ] || script="$(get_custom_feed_worktree_dir)/luci-lib-docker/root/usr/share/rpcd/ucode/docker_rpc.uc"
+    [ -f "$script" ] || { echo "[dockerman-rpc] docker_rpc.uc not found, skip"; return 0; }
+
+    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/997-dockerman-rpc-events-timeout.patch" && \
+        echo "[dockerman-rpc] events timeout patched" || \
+        echo "[dockerman-rpc] events timeout patch failed"
 }
 
 update_nginx_ubus_module() {

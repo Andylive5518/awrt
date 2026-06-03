@@ -1,0 +1,22 @@
+--- a/docker_rpc.uc
++++ b/docker_rpc.uc
+@@ -35,17 +35,20 @@ const CLIENT_VER = '1';
+ function chunked_body_reader(sock, initial_buffer) {
+ 	let state = 0, chunklen = 0, buffer = initial_buffer || '';
++	let deadline = time() + 8;
+
+ 	function poll_and_recv() {
++		if (time() > deadline) return null;
+ 		let ready = socket.poll(POLL_TIMEOUT, [sock, socket.POLLIN]);
+-		if (!ready || !length(ready)) return null;
++		if (!ready || !length(ready) || !ready[0][1]) return null;
+ 		let data = sock.recv(BLOCKSIZE);
+ 		if (!data) return null;
+ 		buffer += data;
+ 		return true;
+ 	}
+
+ 	return () => {
+-		while (true) {
++		while (time() < deadline) {
+ 			if (state === 0) {

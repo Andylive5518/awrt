@@ -1,0 +1,24 @@
+--- a/docker.uc
++++ b/docker.uc
+@@ -48,15 +48,21 @@
+ 	},
+ 
+ 	stream_response_chunks: function(sock, blocksize) {
+-		let chunk;
+-		while ((chunk = sock.recv(blocksize))) {
++		let chunk, deadline = time() + 5;
++		while (time() < deadline) {
++			let ev = socket.poll([sock], 1000);
++			if (!ev) continue;
++			if (ev & 16) break;
++			if (!(ev & 1)) continue;
++			chunk = sock.recv(blocksize);
+ 			if (chunk && length(chunk)) {
+-				this.debug('Streaming chunk:', substr(chunk, 0, 10));
+ 				stdout.write(chunk);
+-			}
++			} else
++				break;
+ 		}
+ 	},
+ 
