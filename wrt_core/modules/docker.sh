@@ -855,7 +855,7 @@ _docker_stack_ensure_nftables_init_support() {
 docker_stack_sync_nftables_compat() {
     local build_dir="${1:-${BUILD_DIR:-}}"
     local dry_run="${2:-${DOCKER_STACK_DRY_RUN:-0}}"
-    local storage_driver="${3:-${DOCKER_STACK_STORAGE_DRIVER:-vfs}}"
+    local storage_driver="${3:-${DOCKER_STACK_STORAGE_DRIVER:-overlay2}}"
     local dockerd_makefile=""
     local dockerd_config=""
     local dockerd_init=""

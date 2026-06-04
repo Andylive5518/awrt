@@ -168,18 +168,18 @@ change_cpuusage() {
     fi
 }
 
-update_tcping() {
-    local tcping_path="$(get_custom_feed_worktree_dir)/tcping/Makefile"
-    local url="https://raw.githubusercontent.com/Openwrt-Passwall/openwrt-passwall-packages/refs/heads/main/tcping/Makefile"
+# update_tcping() {
+#     local tcping_path="$(get_custom_feed_worktree_dir)/tcping/Makefile"
+#     local url="https://raw.githubusercontent.com/Openwrt-Passwall/openwrt-passwall-packages/refs/heads/main/tcping/Makefile"
 
-    if [ -d "$(dirname "$tcping_path")" ]; then
-        echo "正在更新 tcping Makefile..."
-        if ! curl -fsSL -o "$tcping_path" "$url"; then
-            echo "错误：从 $url 下载 tcping Makefile 失败" >&2
-            exit 1
-        fi
-    fi
-}
+#     if [ -d "$(dirname "$tcping_path")" ]; then
+#         echo "正在更新 tcping Makefile..."
+#         if ! curl -fsSL -o "$tcping_path" "$url"; then
+#             echo "错误：从 $url 下载 tcping Makefile 失败" >&2
+#             exit 1
+#         fi
+#     fi
+# }
 
 update_util_linux() {
     local util_linux_dir="$BUILD_DIR/package/utils/util-linux"
@@ -342,47 +342,6 @@ update_menu_location() {
     local tailscale_path="$(get_custom_feed_worktree_dir)/luci-app-tailscale/root/usr/share/luci/menu.d/luci-app-tailscale.json"
     if [ -d "$(dirname "$tailscale_path")" ] && [ -f "$tailscale_path" ]; then
         sed -i 's/services/vpn/g' "$tailscale_path"
-    fi
-
-    # 代理类应用 services → vpn（JSON menu.d / controller lua 两种方式）
-    local proxy_apps="passwall passwall2 homeproxy openclash momo nikki"
-    local app_feed="$(get_custom_feed_source_dir)"
-    local app
-    for app in $proxy_apps; do
-        local json_dir="$app_feed/luci-app-$app/root/usr/share/luci/menu.d"
-        if [ -d "$json_dir" ]; then
-            find "$json_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
-            echo "[menu] $app: services -> vpn — $json_dir"
-        fi
-
-        local ctrl_file="$app_feed/luci-app-$app/luasrc/controller/$app.lua"
-        if [ -f "$ctrl_file" ]; then
-            sed -i \
-                -e 's/"admin", "services", appname/"admin", "vpn", appname/g' \
-                -e "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" \
-                "$ctrl_file"
-            grep -q '"admin", "vpn"' "$ctrl_file" 2>/dev/null \
-                && echo "[menu] $app: services -> vpn — $ctrl_file" \
-                || echo "[menu] $app: WARNING sed unmatched — $ctrl_file"
-        fi
-    done
-
-    # PBR、WOL 等网络工具移到"网络"菜单（services → network）
-    local network_apps="pbr wol"
-    local net_app
-    for net_app in $network_apps; do
-        local net_menu_dirs
-        net_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$net_app/root/usr/share/luci/menu.d" 2>/dev/null)
-        if [ -n "$net_menu_dirs" ]; then
-            while IFS= read -r net_menu_dir; do
-                [ -n "$net_menu_dir" ] && [ -d "$net_menu_dir" ] || continue
-                find "$net_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-                echo "[menu] $net_app: services -> network — $net_menu_dir"
-            done <<< "$net_menu_dirs"
-        fi
-    done
-
-    # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
     local bandix_json_dir="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d"
     if [ -d "$bandix_json_dir" ]; then
         find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
@@ -410,17 +369,17 @@ update_dnsmasq_conf() {
     fi
 }
 
-add_backup_info_to_sysupgrade() {
-    local conf_path="$BUILD_DIR/package/base-files/files/etc/sysupgrade.conf"
+# add_backup_info_to_sysupgrade() {
+#     local conf_path="$BUILD_DIR/package/base-files/files/etc/sysupgrade.conf"
 
-    if [ -f "$conf_path" ]; then
-        cat >"$conf_path" <<'EOF'
-/etc/AdGuardHome.yaml
-/etc/easytier
-/etc/lucky/
-EOF
-    fi
-}
+#     if [ -f "$conf_path" ]; then
+#         cat >"$conf_path" <<'EOF'
+# /etc/AdGuardHome.yaml
+# /etc/easytier
+# /etc/lucky/
+# EOF
+#     fi
+# }
 
 update_script_priority() {
     local qca_drv_path="$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
@@ -554,6 +513,52 @@ fix_easytier_mk() {
     fi
 }
 
+fix_dockerman_menu_order() {
+    local json_path="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/luci/menu.d/luci-app-dockerman.json"
+    if [ -f "$json_path" ]; then
+        sed -i 's/"order": "40"/"order": 40/' "$json_path"
+        echo "[menu] dockerman order 字符串→数字 40（排在 NAS 上面）"
+    fi
+}
+
+# 修复 luci-app-adguardhome 的 rpcd 脚本两个 bug：
+# 1. curl -w "%{http_code}}" 多了一个 } → status code 变成 "200}" 而非 "200"
+# 2. http_address=0.0.0.0 时拼 hostname.domain 做 URL，dnsmasq 不解析该域名 → 改用 LAN IP
+fix_adguardhome_rpcd() {
+    local script
+    script="$(get_custom_feed_worktree_dir)/luci-app-adguardhome/root/usr/libexec/rpcd/luci.adguardhome"
+    [ -f "$script" ] || { echo "[adguardhome] rpcd script not found, skip"; return 0; }
+
+    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/995-adguardhome-rpcd.patch" && \
+        echo "[adguardhome] rpcd script patched" || \
+        echo "[adguardhome] rpcd patch failed"
+}
+
+# Docker 27+/29 的 /events 端点即使带 until 参数也不关闭连接（chunked 无终止符）
+# 用 socket.poll 替代无限阻塞的 sock.recv，总超时 5 秒
+fix_dockerman_events_timeout() {
+    local script
+    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/ucode/controller/docker.uc"
+    [ -f "$script" ] || { echo "[dockerman] docker.uc not found, skip"; return 0; }
+
+    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/996-dockerman-events-timeout.patch" && \
+        echo "[dockerman] events timeout patched" || \
+        echo "[dockerman] events timeout patch failed"
+}
+
+# Docker rpcd 的 chunked_body_reader 有无限 while(true) 轮询
+# Docker 不发 chunked 终止块时不退出，加 8 秒总超时
+fix_dockerman_rpc_events_timeout() {
+    local script
+    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc"
+    [ -f "$script" ] || { echo "[dockerman-rpc] docker_rpc.uc not found, skip"; return 0; }
+
+    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/997-dockerman-rpc-events-timeout.patch" && \
+        echo "[dockerman-rpc] events timeout patched" || \
+        echo "[dockerman-rpc] events timeout patch failed"
+}
+
+>>>>>>> 3a4b1c7 (fix: 更新配置，添加 OverlayFS 支持并修正 Docker 存储驱动)
 update_nginx_ubus_module() {
     local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
     local source_date="2024-03-02"
