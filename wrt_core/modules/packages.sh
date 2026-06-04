@@ -29,7 +29,7 @@ remove_unwanted_packages() {
     local packages_net=(
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
         "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust"
-        "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
+        "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin"
         "chinadns-ng" "ipt2socks" "tcping" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
         "microsocks" "tuic-server" "shadow-tls"
@@ -168,7 +168,7 @@ install_custom_feed() {
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2tcp dns2socks hysteria microsocks \
         naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
-        tuic-client chinadns-ng ipt2socks tcping simple-obfs shadowsocksr-libev \
+        chinadns-ng ipt2socks tcping simple-obfs shadowsocksr-libev \
         v2dat luci-app-adguardhome ddns-go luci-app-iperf3-server \
         luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
         luci-app-quickstart luci-app-istorex netdata luci-app-netdata \
