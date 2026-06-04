@@ -30,7 +30,7 @@ remove_unwanted_packages() {
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
         "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust"
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
-        "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
+        "chinadns-ng" "ipt2socks" "tcping" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
         "microsocks" "tuic-server" "shadow-tls"
     )
@@ -168,7 +168,7 @@ install_custom_feed() {
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2tcp dns2socks hysteria microsocks \
         naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
-        tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
+        tuic-client chinadns-ng ipt2socks tcping simple-obfs shadowsocksr-libev \
         v2dat luci-app-adguardhome ddns-go luci-app-iperf3-server \
         luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
         luci-app-quickstart luci-app-istorex netdata luci-app-netdata \
@@ -548,10 +548,10 @@ add_quickfile() {
     local makefile_path="$target_dir/quickfile/Makefile"
     if [ -f "$makefile_path" ]; then
         sed -i '/\t\$(INSTALL_BIN) \$(PKG_BUILD_DIR)\/quickfile-\$(ARCH_PACKAGES)/c\
-\tif [ "\$(ARCH_PACKAGES)" = "x86_64" ]; then \\\
-\t\t\$(INSTALL_BIN) \$(PKG_BUILD_DIR)\/quickfile-x86_64 \$(1)\/usr\/bin\/quickfile; \\\
-\telse \\\
-\t\t\$(INSTALL_BIN) \$(PKG_BUILD_DIR)\/quickfile-aarch64_generic \$(1)\/usr\/bin\/quickfile; \\\
+\tif [ "\$(ARCH_PACKAGES)" = "x86_64" ]; then \\
+\t\t\$(INSTALL_BIN) \$(PKG_BUILD_DIR)\/quickfile-x86_64 \$(1)\/usr\/bin\/quickfile; \\
+\telse \\
+\t\t\$(INSTALL_BIN) \$(PKG_BUILD_DIR)\/quickfile-aarch64_generic \$(1)\/usr\/bin\/quickfile; \\
 \tfi' "$makefile_path"
     fi
 }
