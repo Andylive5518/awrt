@@ -63,18 +63,18 @@ change_cpuusage() {
     fi
 }
 
-update_tcping() {
-    local tcping_path="$(get_custom_feed_worktree_dir)/tcping/Makefile"
-    local url="https://raw.githubusercontent.com/Openwrt-Passwall/openwrt-passwall-packages/refs/heads/main/tcping/Makefile"
+# update_tcping() {
+#     local tcping_path="$(get_custom_feed_worktree_dir)/tcping/Makefile"
+#     local url="https://raw.githubusercontent.com/Openwrt-Passwall/openwrt-passwall-packages/refs/heads/main/tcping/Makefile"
 
-    if [ -d "$(dirname "$tcping_path")" ]; then
-        echo "正在更新 tcping Makefile..."
-        if ! curl -fsSL -o "$tcping_path" "$url"; then
-            echo "错误：从 $url 下载 tcping Makefile 失败" >&2
-            exit 1
-        fi
-    fi
-}
+#     if [ -d "$(dirname "$tcping_path")" ]; then
+#         echo "正在更新 tcping Makefile..."
+#         if ! curl -fsSL -o "$tcping_path" "$url"; then
+#             echo "错误：从 $url 下载 tcping Makefile 失败" >&2
+#             exit 1
+#         fi
+#     fi
+# }
 
 set_custom_task() {
     local sh_dir="$BUILD_DIR/package/base-files/files/etc/init.d"
@@ -190,45 +190,6 @@ update_menu_location() {
         sed -i 's/services/vpn/g' "$tailscale_path"
     fi
 
-    # 代理类应用 services → vpn（JSON menu.d / controller lua 两种方式）
-    local proxy_apps="homeproxy momo nikki"
-    local app_feed="$(get_custom_feed_source_dir)"
-    local app
-    for app in $proxy_apps; do
-        local json_dir="$app_feed/luci-app-$app/root/usr/share/luci/menu.d"
-        if [ -d "$json_dir" ]; then
-            find "$json_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/vpn/|g' {} \;
-            echo "[menu] $app: services -> vpn — $json_dir"
-        fi
-
-        local ctrl_file="$app_feed/luci-app-$app/luasrc/controller/$app.lua"
-        if [ -f "$ctrl_file" ]; then
-            sed -i \
-                -e 's/"admin", "services", appname/"admin", "vpn", appname/g' \
-                -e "s/\"admin\", \"services\", \"$app\"/\"admin\", \"vpn\", \"$app\"/g" \
-                "$ctrl_file"
-            grep -q '"admin", "vpn"' "$ctrl_file" 2>/dev/null \
-                && echo "[menu] $app: services -> vpn — $ctrl_file" \
-                || echo "[menu] $app: WARNING sed unmatched — $ctrl_file"
-        fi
-    done
-
-    # PBR、WOL 等网络工具移到"网络"菜单（services → network）
-    local network_apps="pbr wol"
-    local net_app
-    for net_app in $network_apps; do
-        local net_menu_dirs
-        net_menu_dirs=$(find "$BUILD_DIR/feeds/" -maxdepth 9 -type d -path "*/luci-app-$net_app/root/usr/share/luci/menu.d" 2>/dev/null)
-        if [ -n "$net_menu_dirs" ]; then
-            while IFS= read -r net_menu_dir; do
-                [ -n "$net_menu_dir" ] && [ -d "$net_menu_dir" ] || continue
-                find "$net_menu_dir" -maxdepth 1 -name '*.json' -exec sed -i 's|"admin/services/|"admin/network/|g' {} \;
-                echo "[menu] $net_app: services -> network — $net_menu_dir"
-            done <<< "$net_menu_dirs"
-        fi
-    done
-
-    # Bandix 移到"状态"菜单，排在 WireGuard 下面 (order=8)
     local bandix_json_dir="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d"
     if [ -d "$bandix_json_dir" ]; then
         find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
@@ -256,17 +217,17 @@ update_dnsmasq_conf() {
     fi
 }
 
-add_backup_info_to_sysupgrade() {
-    local conf_path="$BUILD_DIR/package/base-files/files/etc/sysupgrade.conf"
+# add_backup_info_to_sysupgrade() {
+#     local conf_path="$BUILD_DIR/package/base-files/files/etc/sysupgrade.conf"
 
-    if [ -f "$conf_path" ]; then
-        cat >"$conf_path" <<'EOF'
-/etc/AdGuardHome.yaml
-/etc/easytier
-/etc/lucky/
-EOF
-    fi
-}
+#     if [ -f "$conf_path" ]; then
+#         cat >"$conf_path" <<'EOF'
+# /etc/AdGuardHome.yaml
+# /etc/easytier
+# /etc/lucky/
+# EOF
+#     fi
+# }
 
 update_script_priority() {
     local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
@@ -372,9 +333,6 @@ fix_easytier_mk() {
     fi
 }
 
-# Docker 菜单排序：LuCI 24.10 中字符串 "40" 和数字 40 排序不同
-# 包默认 "order": "40"（字符串）被排到所有数字order之后（即最后）
-# 改为数字 40，和 NAS 同值靠字母序排在前面
 fix_dockerman_menu_order() {
     local json_path="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/luci/menu.d/luci-app-dockerman.json"
     if [ -f "$json_path" ]; then
