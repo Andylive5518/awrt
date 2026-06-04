@@ -378,6 +378,15 @@ fix_dockerman_rpc_events_timeout() {
         echo "[dockerman-rpc] events timeout patch failed"
 }
 
+fix_stale_custom_feed_patches() {
+    local cf_dir
+    cf_dir="$(get_custom_feed_source_dir)"
+    # tuic-client v1.8.5 已移除 #![feature(ip)]，不再需要此 patch
+    [ -f "$cf_dir/tuic-client/patches/001-Fix-rust-stable-build.patch" ] && \
+        rm -f "$cf_dir/tuic-client/patches/001-Fix-rust-stable-build.patch" && \
+        echo "[patch] removed stale: tuic-client/001-Fix-rust-stable-build"
+}
+
 update_nginx_ubus_module() {
     local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
     local source_date="2024-03-02"
