@@ -659,6 +659,31 @@ fix_nikki_gobinpackage() {
     fi
 }
 
+fix_homeproxy_generate_client() {
+    local cf_dir target
+    cf_dir="$(get_custom_feed_source_dir)"
+    target="$cf_dir/luci-app-homeproxy/root/etc/homeproxy/scripts/generate_client.uc"
+    local patch_file="$BASE_PATH/patches/003-homeproxy-singbox-1.13-sniff.patch"
+
+    [ -f "$target" ] || {
+        echo "[homeproxy] generate_client.uc 未找到，跳过"
+        return 0
+    }
+
+    if patch --dry-run -p1 -f -i "$patch_file" "$target" >/dev/null 2>&1; then
+        patch -p1 -i "$patch_file" "$target" && 
+            echo "[homeproxy] sniff fix 已应用（sing-box 1.13+）" || {
+            echo "错误：sniff fix 补丁应用失败" >&2
+            return 1
+        }
+    elif grep -q "action.*sniff" "$target"; then
+        echo "[homeproxy] sniff fix 已存在，跳过"
+    else
+        echo "错误：sniff fix 补丁无法应用（文件可能已被修改）" >&2
+        return 1
+    fi
+}
+
 fix_bandix_default_enabled() {
     local bandix_config="$(get_custom_feed_source_dir)/openwrt-bandix/files/bandix.config"
     if [ -f "$bandix_config" ]; then
