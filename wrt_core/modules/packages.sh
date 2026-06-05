@@ -172,7 +172,7 @@ install_custom_feed() {
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2tcp dns2socks hysteria microsocks \
         naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
-        tuic-client chinadns-ng ipt2socks tcping simple-obfs shadowsocksr-libev \
+        chinadns-ng ipt2socks tcping simple-obfs shadowsocksr-libev \
         v2dat luci-app-adguardhome ddns-go luci-app-iperf3-server \
         luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
         luci-app-quickstart luci-app-istorex netdata luci-app-netdata \
