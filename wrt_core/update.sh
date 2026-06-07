@@ -87,6 +87,7 @@ main() {
     install_feeds
     verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
+    fix_docker_uc_stream_timeout "$BUILD_DIR"
     # fix_cups_libcups_avahi_depends
     # fix_easytier_lua
     # update_adguardhome

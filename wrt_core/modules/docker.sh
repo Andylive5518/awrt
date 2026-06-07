@@ -965,3 +965,39 @@ docker_stack_sync_nftables_compat() {
     _docker_stack_set_or_append_sysctl_value "$dockerd_sysctl" "net.ipv4.ip_forward" "1" || return 1
     _docker_stack_set_or_append_sysctl_value "$dockerd_sysctl" "net.ipv6.conf.all.forwarding" "1" || return 1
 }
+
+# 验证 docker.uc stream_response_chunks 已被 996-dockerman-events-timeout.patch 修复
+# 996 patch 将阻塞 recv 改为 socket.poll 循环，无硬编码总 deadline，由 uhttpd script_timeout 兜底
+fix_docker_uc_stream_timeout() {
+    local build_dir="$1"
+    local uc_file=""
+
+    [ -n "$build_dir" ] || {
+        echo "错误：fix_docker_uc_stream_timeout 缺少 build_dir 参数" >&2
+        return 1
+    }
+
+    build_dir=$(_docker_stack_normalize_build_dir "$build_dir")
+
+    for candidate in \
+        "$build_dir/feeds/luci/applications/luci-app-dockerman/ucode/controller/docker.uc" \
+        "$build_dir/package/feeds/luci/luci-app-dockerman/usr/share/ucode/luci/controller/docker.uc" \
+        "$build_dir/usr/share/ucode/luci/controller/docker.uc"; do
+        [ -f "$candidate" ] && { uc_file="$candidate"; break; }
+    done
+
+    [ -n "$uc_file" ] || {
+        echo "docker.uc 控制器未找到，跳过验证"
+        return 0
+    }
+
+    # 996 patch 正确修复的特征：有 socket.poll 但无 deadline
+    if grep -q 'socket.poll' "$uc_file" 2>/dev/null \
+        && ! grep -q "deadline = time()" "$uc_file" 2>/dev/null; then
+        echo "docker.uc stream_response_chunks 已正确修复（poll+无deadline）"
+        return 0
+    fi
+
+    echo "警告：docker.uc stream_response_chunks 未按预期修复，请检查 996 patch 是否应用成功" >&2
+    return 1
+}

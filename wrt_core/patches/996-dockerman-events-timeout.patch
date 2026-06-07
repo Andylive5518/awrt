@@ -1,15 +1,15 @@
---- a/docker.uc	2026-06-02 21:19:48.000000000 +0800
-+++ b/docker.uc	2026-06-03 23:17:30.819303273 +0800
+--- a/docker.uc
++++ b/docker.uc
 @@ -68,12 +68,17 @@
- 
+
  	// Stream the rest of the response in chunks from the socket
  	stream_response_chunks: function(sock, blocksize) {
 -		let chunk;
 -		while ((chunk = sock.recv(blocksize))) {
 -			if (chunk && length(chunk)) {
 -				this.debug('Streaming chunk:', substr(chunk, 0, 10));
-+		let chunk, deadline = time() + 5;
-+		while (time() < deadline) {
++		let chunk;
++		while (true) {
 +			let ev = socket.poll([sock], 1000);
 +			if (!ev) continue;
 +			if (ev & 16) break;
@@ -22,4 +22,3 @@
 +				break;
  		}
  	},
- 
