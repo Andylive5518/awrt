@@ -348,6 +348,7 @@ update_menu_location() {
             -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
         local bandix_json
         bandix_json=$(find "$bandix_json_dir" -maxdepth 1 -name '*.json' | head -1)
+	fi
         if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
             sed -i 's/"order": 90/"order": 8/' "$bandix_json"
         fi
@@ -558,7 +559,6 @@ fix_dockerman_rpc_events_timeout() {
         echo "[dockerman-rpc] events timeout patch failed"
 }
 
->>>>>>> 3a4b1c7 (fix: 更新配置，添加 OverlayFS 支持并修正 Docker 存储驱动)
 update_nginx_ubus_module() {
     local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
     local source_date="2024-03-02"
@@ -820,40 +820,6 @@ enable_ttyd_autologin() {
     fi
 }
 
-fix_nikki_gobinpackage() {
-    # nikki 是纯配置/UI 元包（meta-package），不含 Go 源码也不应编译。
-    # mihomo 二进制由独立的 mihomo 包（GoBinPackage）编译并提供。
-    #
-    # 问题：golang-package.mk 第 293-301 行检测到 GO_PKG 非空后，
-    # 全局挂载了 Build/InstallDev=$(call GoPackage/Build/InstallDev)，而
-    # GoPackage/Build/InstallDev 内部调用 install_src，需要复制源码到
-    # .go_work/build/src/ 目录。但 nikki 没有 Go 源码（build_dir 为空），
-    # golang-build.sh configure 阶段不会创建该目录，导致 install_src 失败。
-    #
-    # nikki 的 Build/Compile 已定义为空（正确阻止编译），
-    # 但 Build/InstallDev 未在 Makefile 中定义，继承了全局挂载。
-    #
-    # 修复方法：在 $(eval ...) 调用前追加空的 Build/InstallDev，
-    # 覆盖 golang-package.mk 的全局挂载。不改变 GoBinPackage/GoPackage 类型，
-    # 不改变 Build/Compile。
-    local nikki_makefile="$(get_custom_feed_package_dir)/nikki/Makefile"
-    if [ -f "$nikki_makefile" ]; then
-        if ! grep -q '^define Build/InstallDev$' "$nikki_makefile"; then
-            # 在 $(eval $(call GoBinPackage,nikki)) 或 $(eval $(call GoPackage,nikki)) 之前插入
-            awk '
-            /^\$\(eval \$\(call Go(Bin)?Package,nikki\)\)/ {
-                print "define Build/InstallDev"
-                print "endef"
-                print ""
-            }
-            { print }
-            ' "$nikki_makefile" > "$nikki_makefile.tmp" && mv "$nikki_makefile.tmp" "$nikki_makefile"
-            echo "[nikki] Build/InstallDev 置空（覆盖 golang-package.mk 全局挂载）"
-        else
-            echo "[nikki] Build/InstallDev 已存在，跳过"
-        fi
-    fi
-}
 
 fix_tuic_downgrade() {
     # ImmortalWrt 24.10 使用 Rust 1.90 stable，main 分支自编译 Rust 1.94。
@@ -883,5 +849,58 @@ fix_bandix_default_enabled() {
     if [ -f "$bandix_config" ]; then
         sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
         echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
+    fi
+}
+
+fix_homeproxy_patches() {
+    local cf_dir
+    cf_dir="$(get_custom_feed_source_dir)/luci-app-homeproxy"
+
+    [ -d "$cf_dir" ] || {
+        echo "[homeproxy] luci-app-homeproxy 未找到，跳过"
+        return 0
+    }
+
+    local patches=(
+        "$BASE_PATH/patches/003-homeproxy-singbox-1.13-sniff.patch"
+        "$BASE_PATH/patches/004-homeproxy-js-validator.patch"
+        "$BASE_PATH/patches/005-homeproxy-client-ui.patch"
+        "$BASE_PATH/patches/006-homeproxy-node-ui.patch"
+        "$BASE_PATH/patches/007-homeproxy-uci-defaults.patch"
+        "$BASE_PATH/patches/008-homeproxy-generate-client.patch"
+        "$BASE_PATH/patches/009-homeproxy-migrate-config.patch"
+    )
+
+    for patch in "${patches[@]}"; do
+        [ -f "$patch" ] || continue
+
+        if patch --dry-run -p1 -d "$cf_dir" -i "$patch" >/dev/null 2>&1; then
+            patch -p1 -d "$cf_dir" -i "$patch" &&
+                echo "[homeproxy] $(basename $patch) 已应用" ||
+                echo "[homeproxy] 警告：$(basename $patch) 应用失败" >&2
+        elif grep -q "homeproxy" "$cf_dir/root/etc/homeproxy/scripts/homeproxy.uc" 2>/dev/null; then
+            echo "[homeproxy] $(basename $patch) 已存在，跳过"
+        else
+            echo "[homeproxy] 警告：$(basename $patch) 无法应用，跳过" >&2
+        fi
+    done
+}
+
+fix_nikki_gobinpackage() {
+    # nikki 设了 GO_PKG 并用了 GoBinPackage，但 Build/Compile 是空的。
+    # GoBinPackage 的 Build/Install 会调 install_src，导致失败。
+    # 修复：用 patch 插入空的 Build/InstallDev + Build/Install 覆盖。
+    local dir="$(get_custom_feed_package_dir)/nikki"
+    local patch_file="$BASE_PATH/patches/022-nikki-build-install.patch"
+    [ -f "$dir/Makefile" ] || return 0
+    if grep -q '^define Build/Install$' "$dir/Makefile" 2>/dev/null; then
+        echo "[nikki] 修复已存在，跳过"
+        return 0
+    fi
+    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$dir" -i "$patch_file" && echo "[nikki] Build/Install 已覆盖"
+    else
+        echo "[nikki] 错误：补丁无法应用" >&2
+        return 1
     fi
 }

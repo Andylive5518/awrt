@@ -1,0 +1,163 @@
+--- a/luasrc/controller/istore_backend.lua	2026-06-08 13:54:32.177511060 +0800
++++ b/luasrc/controller/istore_backend.lua	2026-06-08 13:54:18.443979986 +0800
+@@ -60,49 +60,65 @@
+ end
+ 
+ local function chunksource(sock, buffer)
+-	buffer = buffer or ""
+-	return function()
+-		local output
+-		local _, endp, count = buffer:find("^([0-9a-fA-F]+);?.-\r\n")
+-		while not count and #buffer <= 1024 do
+-			local newblock, code = sock:recv(1024 - #buffer)
+-			if not newblock then
+-				return nil, code
+-			end
+-			buffer = buffer .. newblock  
+-			_, endp, count = buffer:find("^([0-9a-fA-F]+);?.-\r\n")
+-		end
+-		count = tonumber(count, 16)
+-		if not count then
+-			return nil, -1, "invalid encoding"
+-		elseif count == 0 then
+-			return nil
+-		elseif count + 2 <= #buffer - endp then
+-			output = buffer:sub(endp+1, endp+count)
+-			buffer = buffer:sub(endp+count+3)
+-			return output
+-		else
+-			output = buffer:sub(endp+1, endp+count)
+-			buffer = ""
+-			if count - #output > 0 then
+-				local remain, code = sock:recvall(count-#output)
+-				if not remain then
+-					return nil, code
+-				end
+-				output = output .. remain
+-				count, code = sock:recvall(2)
+-			else
+-				count, code = sock:recvall(count+2-#buffer+endp)
+-			end
+-			if not count then
+-				return nil, code
+-			end
+-			return output
+-		end
+-	end
++        buffer = buffer or ""
++        return function()
++                local output
++                local _, endp, count = buffer:find("^([0-9a-fA-F]+);?.-\r\n")
++                while not count and #buffer <= 1024 do
++                        local newblock, code = sock:recv(1024 - #buffer)
++                        if not newblock then
++                                return nil, code
++                        end
++                        buffer = buffer .. newblock  
++                        _, endp, count = buffer:find("^([0-9a-fA-F]+);?.-\r\n")
++                end
++                count = tonumber(count, 16)
++                if not count then
++                        return nil, -1, "invalid encoding"
++                elseif count == 0 then
++                        return nil
++                elseif count + 2 <= #buffer - endp then
++                        output = buffer:sub(endp+1, endp+count)
++                        buffer = buffer:sub(endp+count+3)
++                        return output
++                else
++                        output = buffer:sub(endp+1, endp+count)
++                        buffer = ""
++                        if count - #output > 0 then
++                                local remain, code = sock:recvall(count-#output)
++                                if not remain then
++                                        return nil, code
++                                end
++                                output = output .. remain
++                                count, code = sock:recvall(2)
++                        else
++                                count, code = sock:recvall(count+2-#buffer+endp)
++                        end
++                        if not count then
++                                return nil, code
++                        end
++                        return output
++                end
++        end
++end
++
++local function get_cpu_temperature()
++  local temp_file = io.open("/sys/class/thermal/thermal_zone0/temp", "r")
++  if temp_file then
++    local temp = temp_file:read("*n")
++    temp_file:close()
++    if temp then
++      return math.floor(temp / 1000)
++    end
++  end
++  return 0
+ end
+ 
+ function istore_backend() 
++  -- 检查是否为 system/status 请求
++  local uri = http.getenv("REQUEST_URI")
++  local is_status_request = string.match(uri, "/istore/system/status/")
++
+   local sock = nixio.connect("127.0.0.1", ISTOREOS_PORT) 
+   if not sock then
+     http.status(500, "connect failed")
+@@ -178,12 +194,48 @@
+ 
+   local body_buffer = linesrc(true)
+   if chunked == 1 then
+-    ltn12.pump.all(chunksource(sock, body_buffer), http.write)
++    if is_status_request then
++      -- 收集所有数据
++      local chunks = {}
++      local source = chunksource(sock, body_buffer)
++      local chunk
++      repeat
++        chunk = source()
++        if chunk then
++          table.insert(chunks, chunk)
++        end
++      until not chunk
++      
++      -- 修改 JSON
++      local json = table.concat(chunks)
++      local cpu_temp = get_cpu_temperature()
++      local modified_json = json:gsub('"result":{', string.format('"result":{"cpuTemperature":%d,', cpu_temp))
++      
++      -- 发送修改后的数据
++      http.write(modified_json)
++    else
++      ltn12.pump.all(chunksource(sock, body_buffer), http.write)
++    end
+   else
+-    local body_source = ltn12.source.cat(ltn12.source.string(body_buffer), sock:blocksource())
+-    ltn12.pump.all(body_source, http.write)
++    if is_status_request then
++      -- 收集所有数据
++      local chunks = {}
++      local body_source = ltn12.source.cat(ltn12.source.string(body_buffer), sock:blocksource())
++      local sink = ltn12.sink.table(chunks)
++      ltn12.pump.all(body_source, sink)
++      
++      -- 修改 JSON
++      local json = table.concat(chunks)
++      local cpu_temp = get_cpu_temperature()
++      local modified_json = json:gsub('"result":{', string.format('"result":{"cpuTemperature":%d,', cpu_temp))
++      
++      -- 发送修改后的数据
++      http.write(modified_json)
++    else
++      local body_source = ltn12.source.cat(ltn12.source.string(body_buffer), sock:blocksource())
++      ltn12.pump.all(body_source, http.write)
++    end
+   end
+ 
+   sock:close()
+-end
+-
++end
+\ No newline at end of file

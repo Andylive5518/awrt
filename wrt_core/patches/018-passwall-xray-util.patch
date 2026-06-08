@@ -1,0 +1,20 @@
+--- --- a/luasrc/passwall/util_xray.lua	2026-06-08 14:30:41.370559375 +0800
++++ +++ b/luasrc/passwall/util_xray.lua	2026-06-08 14:32:27.385399353 +0800
+@@ -1127,7 +1127,7 @@
+ 					type = _node.balancingStrategy,
+ 					settings = {
+ 						expected = _node.expected and tonumber(_node.expected) and tonumber(_node.expected) or 2,
+-						maxRTT = "1s",
++						maxRTT = "2s",
+ 						tolerance = (function(t)
+ 							t = tonumber(t) or 0
+ 							if t < 1 then return nil end
+@@ -1158,7 +1158,7 @@
+ 						pingConfig = {
+ 							destination = _node.useCustomProbeUrl and _node.probeUrl or nil,
+ 							interval = t,
+-							sampling = 3,
++							sampling = 5,
+ 							timeout = "5s"
+ 						}
+ 					}

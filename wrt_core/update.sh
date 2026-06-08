@@ -42,7 +42,7 @@ main() {
     remove_unwanted_packages
     remove_tweaked_packages
     install_custom_feed
-    update_homeproxy
+    fix_homeproxy_patches
     fix_default_set
     fix_miniupnpd
     update_golang
