@@ -439,3 +439,19 @@ fix_bandix_default_enabled() {
         patch -p1 -d "$cf_dir" -i "$patch_file" && echo "[bandix] 默认启用"
     fi
 }
+
+fix_nikki_gobinpackage() {
+    local dir="$(get_custom_feed_package_dir)/nikki"
+    local patch_file="$BASE_PATH/patches/022-nikki-build-install.patch"
+    [ -f "$dir/Makefile" ] || return 0
+    if grep -q '^define Build/Install$' "$dir/Makefile" 2>/dev/null; then
+        echo "[nikki] 修复已存在，跳过"
+        return 0
+    fi
+    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$dir" -i "$patch_file" && echo "[nikki] Build/Install 已覆盖（阻止 install_src）"
+    else
+        echo "[nikki] 错误：补丁无法应用" >&2
+        return 1
+    fi
+}
