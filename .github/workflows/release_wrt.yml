@@ -6,6 +6,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  LAN_ADDR: "192.168.9.71"
 
 jobs:
   build:

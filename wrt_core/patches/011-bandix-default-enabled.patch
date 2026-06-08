@@ -1,0 +1,25 @@
+--- --- a/files/bandix.config	2026-06-08 14:31:36.155209035 +0800
++++ +++ b/files/bandix.config	2026-06-08 14:32:27.351181172 +0800
+@@ -16,7 +16,7 @@
+ 
+ 
+ config bandix 'traffic'
+-	option enabled '0'
++	option enabled '1'
+ 	option speed_unit 'bytes'
+ 	option offline_timeout '120'
+ 	option traffic_realtime_window '600'
+@@ -31,11 +31,11 @@
+ 
+ 
+ config bandix 'connections'
+-	option enabled '0'
++	option enabled '1'
+ 
+ 
+ config bandix 'dns'
+-	option enabled '0'
++	option enabled '1'
+ 	option dns_max_records '10000'
+ 	option dns_enable_storage '0'
+ 	option dns_flush_interval '900'

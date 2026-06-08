@@ -24,7 +24,7 @@ FEEDS_CONF="feeds.conf.default"
 GOLANG_REPO="https://github.com/sbwml/packages_lang_golang"
 GOLANG_BRANCH="26.x"
 THEME_SET="argon"
-LAN_ADDR="192.168.9.71"
+LAN_ADDR="${LAN_ADDR:-192.168.168.1}"
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 BASE_PATH=${BASE_PATH:-$SCRIPT_DIR}
@@ -42,65 +42,41 @@ main() {
     remove_unwanted_packages
     remove_tweaked_packages
     install_custom_feed
-    fix_homeproxy_generate_client
+    fix_homeproxy_patches
     fix_argon_wget_depends
-    # update_homeproxy
     fix_default_set
-    # fix_miniupnpd
+    fix_miniupnpd
     update_golang
-    # change_dnsmasq2full
+    ## change_dnsmasq2full
     update_default_lan_addr
-    # change_cpuusage
-    # update_tcping
-    # set_custom_task
-    # apply_passwall_tweaks
+    set_custom_task
+    apply_passwall_tweaks
     set_build_signature
     update_menu_location
-    # fix_compile_coremark
-    # update_dnsmasq_conf
-    # add_backup_info_to_sysupgrade
-    # update_mosdns_deconfig
-    # fix_quickstart
+    ## update_dnsmasq_conf
+    fix_quickstart
     update_oaf_deconfig
-    # add_timecontrol
-    # add_quickfile
-    # update_lucky
-    # fix_rust_compile_error
+    ## add_quickfile
     update_smartdns
-    # update_diskman
-    # update_dockerman
-    update_dockerman_mirrors
-    # set_nginx_default_config
-    # update_uwsgi_limit_as
-    # update_argon
-    # update_nginx_ubus_module
-    # check_default_settings
+    ## update_dockerman
+    ## set_nginx_default_config
     install_opkg_distfeeds
     fix_dockerman_menu_order
     fix_adguardhome_rpcd
     fix_dockerman_events_timeout
     fix_dockerman_rpc_events_timeout
     fix_bandix_default_enabled
-    # fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
     verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_docker_uc_stream_timeout "$BUILD_DIR"
-    # fix_cups_libcups_avahi_depends
-    # fix_easytier_lua
-    # update_adguardhome
-    # update_script_priority
-    update_geoip
-    # fix_openssl_ktls
-    # fix_opkg_check
-    # fix_netfilter_kmod_clash
+    ## fix_cups_libcups_avahi_depends
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
     enable_ttyd_autologin
-    # fix_nikki_gobinpackage
     fix_pbr_ip_forward
 }
 

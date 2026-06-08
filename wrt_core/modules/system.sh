@@ -7,7 +7,6 @@ fix_default_set() {
 
     install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
     install -Dm544 "$BASE_PATH/patches/991_custom_settings" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/991_custom_settings"
-    # install -Dm544 "$BASE_PATH/patches/992_set-wifi-uci.sh" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/992_set-wifi-uci.sh"
     # install -Dm544 "$BASE_PATH/patches/993_ddns-go-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/993_ddns-go-config"
     install -Dm544 "$BASE_PATH/patches/994_adguardhome-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/994_adguardhome-config"
     install -Dm544 "$BASE_PATH/patches/995_pbr_isp_config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/995_pbr_isp_config"
@@ -49,33 +48,6 @@ update_default_lan_addr() {
     fi
 }
 
-change_cpuusage() {
-    local luci_rpc_path="$BUILD_DIR/feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci"
-
-    if [ -f "$luci_rpc_path" ]; then
-        sed -i "s#const fd = popen('top -n1 | awk \\\'/^CPU/ {printf(\"%d%\", 100 - \$8)}\\\'')#const cpuUsageCommand = access('/sbin/cpuusage') ? '/sbin/cpuusage' : 'top -n1 | awk \\\'/^CPU/ {printf(\"%d%\", 100 - \$8)}\\\''#g" "$luci_rpc_path"
-        sed -i '/cpuUsageCommand/a \\t\t\tconst fd = popen(cpuUsageCommand);' "$luci_rpc_path"
-    fi
-
-    local old_script_path="$BUILD_DIR/package/base-files/files/sbin/cpuusage"
-    if [ -f "$old_script_path" ]; then
-        rm -f "$old_script_path"
-    fi
-}
-
-# update_tcping() {
-#     local tcping_path="$(get_custom_feed_worktree_dir)/tcping/Makefile"
-#     local url="https://raw.githubusercontent.com/Openwrt-Passwall/openwrt-passwall-packages/refs/heads/main/tcping/Makefile"
-
-#     if [ -d "$(dirname "$tcping_path")" ]; then
-#         echo "正在更新 tcping Makefile..."
-#         if ! curl -fsSL -o "$tcping_path" "$url"; then
-#             echo "错误：从 $url 下载 tcping Makefile 失败" >&2
-#             exit 1
-#         fi
-#     fi
-# }
-
 set_custom_task() {
     local sh_dir="$BUILD_DIR/package/base-files/files/etc/init.d"
     cat <<'EOF' >"$sh_dir/custom_task"
@@ -104,15 +76,17 @@ EOF
 }
 
 apply_passwall_tweaks() {
-    local chnlist_path="$(get_custom_feed_worktree_dir)/luci-app-passwall/root/usr/share/passwall/rules/chnlist"
+    local dir="$(get_custom_feed_worktree_dir)/luci-app-passwall"
+    local chnlist_path="$dir/root/usr/share/passwall/rules/chnlist"
     if [ -f "$chnlist_path" ]; then
         >"$chnlist_path"
     fi
 
-    local xray_util_path="$(get_custom_feed_worktree_dir)/luci-app-passwall/luasrc/passwall/util_xray.lua"
-    if [ -f "$xray_util_path" ]; then
-        sed -i 's/maxRTT = "1s"/maxRTT = "2s"/g' "$xray_util_path"
-        sed -i 's/sampling = 3/sampling = 5/g' "$xray_util_path"
+    local patch_file="$BASE_PATH/patches/018-passwall-xray-util.patch"
+    if [ -d "$dir" ]; then
+        if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+            patch -p1 -d "$dir" -i "$patch_file" && echo "[passwall] xray util 已调优"
+        fi
     fi
 }
 
@@ -136,7 +110,6 @@ src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${versio
 src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony/
 EOF
 
-        # 仅在首次注入 install 规则和 uci-defaults mv 命令
         if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
             sed -i "/define Package\/default-settings\/install/a\\
 \t\$(INSTALL_DIR) \$(1)/etc\\
@@ -173,40 +146,31 @@ sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/
 }
 
 set_build_signature() {
-    local file="$BUILD_DIR/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js"
-    if [ -d "$(dirname "$file")" ] && [ -f $file ]; then
-        sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ build by Alex')/g" "$file"
+    local dir="$BUILD_DIR/feeds/luci"
+    local target="$dir/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js"
+    local patch_file="$BASE_PATH/patches/013-build-signature.patch"
+    [ -f "$target" ] || return 0
+    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$dir" -i "$patch_file" && echo "[build] signature: build by Alex"
     fi
 }
 
 update_menu_location() {
-    local samba4_path="$BUILD_DIR/feeds/luci/applications/luci-app-samba4/root/usr/share/luci/menu.d/luci-app-samba4.json"
-    if [ -d "$(dirname "$samba4_path")" ] && [ -f "$samba4_path" ]; then
-        sed -i 's/nas/services/g' "$samba4_path"
-    fi
+    local patch_file
 
-    local tailscale_path="$(get_custom_feed_worktree_dir)/luci-app-tailscale/root/usr/share/luci/menu.d/luci-app-tailscale.json"
-    if [ -d "$(dirname "$tailscale_path")" ] && [ -f "$tailscale_path" ]; then
-        sed -i 's/services/vpn/g' "$tailscale_path"
-    fi
-
-    local bandix_json_dir="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d"
-    if [ -d "$bandix_json_dir" ]; then
-        find "$bandix_json_dir" -maxdepth 1 -name '*.json' \
-            -exec sed -i 's|"admin/network/bandix|"admin/status/bandix|g' {} \;
-        local bandix_json
-        bandix_json=$(find "$bandix_json_dir" -maxdepth 1 -name '*.json' | head -1)
-        if [ -n "$bandix_json" ] && [ -f "$bandix_json" ]; then
-            sed -i 's/"order": 90/"order": 8/' "$bandix_json"
+    patch_file="$BASE_PATH/patches/015-menu-samba4.patch"
+    if [ -d "$BUILD_DIR/feeds/luci/applications/luci-app-samba4" ]; then
+        if patch --dry-run -p1 -d "$BUILD_DIR/feeds/luci/applications/luci-app-samba4" -i "$patch_file" >/dev/null 2>&1; then
+            patch -p1 -d "$BUILD_DIR/feeds/luci/applications/luci-app-samba4" -i "$patch_file"
         fi
-        echo "[menu] bandix: network -> status (order=8) — $bandix_json_dir"
     fi
-}
 
-fix_compile_coremark() {
-    local file="$BUILD_DIR/feeds/packages/utils/coremark/Makefile"
-    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
-        sed -i 's/mkdir \$/mkdir -p \$/g' "$file"
+    patch_file="$BASE_PATH/patches/016-menu-bandix.patch"
+    local bdir="$(get_custom_feed_source_dir)/luci-app-bandix"
+    if [ -d "$bdir" ]; then
+        if patch --dry-run -p1 -d "$bdir" -i "$patch_file" >/dev/null 2>&1; then
+            patch -p1 -d "$bdir" -i "$patch_file" && echo "[menu] bandix: network→status"
+        fi
     fi
 }
 
@@ -217,133 +181,56 @@ update_dnsmasq_conf() {
     fi
 }
 
-# add_backup_info_to_sysupgrade() {
-#     local conf_path="$BUILD_DIR/package/base-files/files/etc/sysupgrade.conf"
-
-#     if [ -f "$conf_path" ]; then
-#         cat >"$conf_path" <<'EOF'
-# /etc/AdGuardHome.yaml
-# /etc/easytier
-# /etc/lucky/
-# EOF
-#     fi
-# }
-
-update_script_priority() {
-    local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
-    if [ -d "${mosdns_path%/*}" ] && [ -f "$mosdns_path" ]; then
-        sed -i 's/START=.*/START=94/g' "$mosdns_path"
-    fi
-}
-
-update_mosdns_deconfig() {
-    local mosdns_conf="$(get_custom_feed_worktree_dir)/luci-app-mosdns/root/etc/config/mosdns"
-    if [ -d "${mosdns_conf%/*}" ] && [ -f "$mosdns_conf" ]; then
-        sed -i 's/8000/300/g' "$mosdns_conf"
-        sed -i 's/5335/5336/g' "$mosdns_conf"
-    fi
-}
-
 fix_quickstart() {
-    local file_path="$(get_custom_feed_worktree_dir)/luci-app-quickstart/luasrc/controller/istore_backend.lua"
-    local url="https://gist.githubusercontent.com/puteulanus/1c180fae6bccd25e57eb6d30b7aa28aa/raw/istore_backend.lua"
-    if [ -f "$file_path" ]; then
-        echo "正在修复 quickstart..."
-        if ! curl -fsSL -o "$file_path" "$url"; then
-            echo "错误：从 $url 下载 istore_backend.lua 失败" >&2
-            exit 1
-        fi
+    local cf_dir patch_file
+    cf_dir="$(get_custom_feed_source_dir)/luci-app-quickstart"
+    patch_file="$BASE_PATH/patches/010-quickstart-istore-backend-cpu-temp.patch"
+    local target="$cf_dir/luasrc/controller/istore_backend.lua"
+
+    [ -f "$target" ] || {
+        echo "[quickstart] istore_backend.lua 未找到，跳过"
+        return 0
+    }
+
+    if patch --dry-run -p1 -d "$cf_dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$cf_dir" -i "$patch_file" && \
+            echo "[quickstart] CPU 温度补丁已应用" || \
+            echo "[quickstart] 警告：补丁应用失败" >&2
+    else
+        echo "[quickstart] CPU 温度补丁已存在，跳过"
     fi
 }
 
 update_oaf_deconfig() {
-    local appfilter_confs
-    appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
-    local uci_defs
-    uci_defs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
+    local dir patch_file
 
-    # 修改 appfilter.config
-    if [ -n "$appfilter_confs" ]; then
-        while IFS= read -r appfilter_conf; do
-            [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
-            sed -i -e "s/record_enable '1'/record_enable '0'/g" \
-                   -e "s/auto_load_engine '[01]'/auto_load_engine '1'/g" "$appfilter_conf"
-            echo "[OAF] auto_load_engine=1, record_enable=0 — $appfilter_conf"
-        done <<< "$appfilter_confs"
-    fi
-
-    # 修改 94_feature_3.0，删除 disable_hnat，防止首次启动覆盖配置
-    # x86_64: auto_load_engine 保留（已在 appfilter.config 中设为 '1'）
-    if [ -n "$uci_defs" ]; then
-        while IFS= read -r uci_def; do
-            [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
-            if grep -q 'disable_hnat' "$uci_def" 2>/dev/null; then
-                sed -i '/disable_hnat/d' "$uci_def"
-                echo "[OAF] uci_def: removed disable_hnat — $uci_def"
-            else
-                echo "[OAF] uci_def: already clean — $uci_def"
-            fi
-        done <<< "$uci_defs"
-    fi
-}
-
-update_geoip() {
-    local geodata_path="$(get_custom_feed_package_dir)/v2ray-geodata/Makefile"
-    if [ -d "${geodata_path%/*}" ] && [ -f "$geodata_path" ]; then
-        local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' $geodata_path | grep -oE "[0-9]{1,}")
-        if [ -n "$GEOIP_VER" ]; then
-            local base_url="https://github.com/v2fly/geoip/releases/download/${GEOIP_VER}"
-            local old_SHA256
-            if ! old_SHA256=$(wget -qO- "$base_url/geoip.dat.sha256sum" | awk '{print $1}'); then
-                echo "错误：从 $base_url/geoip.dat.sha256sum 获取旧的 geoip.dat 校验和失败" >&2
-                return 1
-            fi
-            local new_SHA256
-            if ! new_SHA256=$(wget -qO- "$base_url/geoip-only-cn-private.dat.sha256sum" | awk '{print $1}'); then
-                echo "错误：从 $base_url/geoip-only-cn-private.dat.sha256sum 获取新的 geoip-only-cn-private.dat 校验和失败" >&2
-                return 1
-            fi
-            if [ -n "$old_SHA256" ] && [ -n "$new_SHA256" ]; then
-                if grep -q "$old_SHA256" "$geodata_path"; then
-                    sed -i "s|=geoip.dat|=geoip-only-cn-private.dat|g" "$geodata_path"
-                    sed -i "s/$old_SHA256/$new_SHA256/g" "$geodata_path"
-                fi
-            fi
+    # appfilter.config: record_enable 1→0
+    dir="$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -name 'open-app-filter' 2>/dev/null | head -1)"
+    patch_file="$BASE_PATH/patches/020-oaf-appfilter-config.patch"
+    if [ -n "$dir" ] && [ -f "$dir/files/appfilter.config" ]; then
+        if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+            patch -p1 -d "$dir" -i "$patch_file" && echo "[OAF] appfilter: record_enable=0"
         fi
     fi
-}
 
-fix_rust_compile_error() {
-    if [ -f "$BUILD_DIR/feeds/packages/lang/rust/Makefile" ]; then
-        sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$BUILD_DIR/feeds/packages/lang/rust/Makefile"
-    fi
-}
-
-fix_easytier_lua() {
-    local file_path="$(get_custom_feed_package_dir)/luci-app-easytier/luasrc/model/cbi/easytier.lua"
-    if [ -f "$file_path" ]; then
-        sed -i 's/util.pcdata/xml.pcdata/g' "$file_path"
-    fi
-}
-
-fix_easytier_mk() {
-    local mk_path="$(get_custom_feed_worktree_dir)/luci-app-easytier/easytier/Makefile"
-    if [ -f "$mk_path" ]; then
-        sed -i 's/!@(mips||mipsel)/!TARGET_mips \&\& !TARGET_mipsel/g' "$mk_path"
+    # uci-defaults: 上游已无 disable_hnat，无需修补
+    local uci_def
+    uci_def=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null | head -1)
+    if [ -n "$uci_def" ] && grep -q 'disable_hnat' "$uci_def" 2>/dev/null; then
+        sed -i '/disable_hnat/d' "$uci_def"
+        echo "[OAF] uci_def: removed disable_hnat"
     fi
 }
 
 fix_dockerman_menu_order() {
-    local json_path="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/luci/menu.d/luci-app-dockerman.json"
-    if [ -f "$json_path" ]; then
-        sed -i 's/"order": "40"/"order": 40/' "$json_path"
-        echo "[menu] dockerman order 字符串→数字 40（排在 NAS 上面）"
+    local dir="$(get_custom_feed_worktree_dir)/luci-app-dockerman"
+    local patch_file="$BASE_PATH/patches/012-dockerman-menu-order.patch"
+    [ -f "$dir/root/usr/share/luci/menu.d/luci-app-dockerman.json" ] || return 0
+    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$dir" -i "$patch_file" && echo "[menu] dockerman order 40"
     fi
 }
 
-# 修复 luci-app-adguardhome 的 rpcd 脚本两个 bug：
-# 1. curl -w "%{http_code}}" 多了一个 } → status code 变成 "200}" 而非 "200"
-# 2. http_address=0.0.0.0 时拼 hostname.domain 做 URL，dnsmasq 不解析该域名 → 改用 LAN IP
 fix_adguardhome_rpcd() {
     local script
     script="$(get_custom_feed_worktree_dir)/luci-app-adguardhome/root/usr/libexec/rpcd/luci.adguardhome"
@@ -378,98 +265,6 @@ fix_dockerman_rpc_events_timeout() {
         echo "[dockerman-rpc] events timeout patch failed"
 }
 
-update_nginx_ubus_module() {
-    local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
-    local source_date="2024-03-02"
-    local source_version="564fa3e9c2b04ea298ea659b793480415da26415"
-    local mirror_hash="92c9ab94d88a2fe8d7d1e8a15d15cfc4d529fdc357ed96d22b65d5da3dd24d7f"
-
-    if [ -f "$makefile_path" ]; then
-        sed -i "s/SOURCE_DATE:=2020-09-06/SOURCE_DATE:=$source_date/g" "$makefile_path"
-        sed -i "s/SOURCE_VERSION:=b2d7260dcb428b2fb65540edb28d7538602b4a26/SOURCE_VERSION:=$source_version/g" "$makefile_path"
-        sed -i "s/MIRROR_HASH:=515bb9d355ad80916f594046a45c190a68fb6554d6795a54ca15cab8bdd12fda/MIRROR_HASH:=$mirror_hash/g" "$makefile_path"
-        echo "已更新 nginx-mod-ubus 模块的 SOURCE_DATE, SOURCE_VERSION 和 MIRROR_HASH。"
-    else
-        echo "错误：未找到 $makefile_path 文件，无法更新 nginx-mod-ubus 模块。" >&2
-    fi
-}
-
-fix_openssl_ktls() {
-    local config_in="$BUILD_DIR/package/libs/openssl/Config.in"
-    if [ -f "$config_in" ]; then
-        echo "正在更新 OpenSSL kTLS 配置..."
-        sed -i 's/select PACKAGE_kmod-tls/depends on PACKAGE_kmod-tls/g' "$config_in"
-        sed -i '/depends on PACKAGE_kmod-tls/a\\tdefault y if PACKAGE_kmod-tls' "$config_in"
-    fi
-}
-
-fix_opkg_check() {
-    local patch_file="$BASE_PATH/patches/001-fix-provides-version-parsing.patch"
-    local opkg_dir="$BUILD_DIR/package/system/opkg"
-    if [ -f "$patch_file" ]; then
-        install -Dm644 "$patch_file" "$opkg_dir/patches/001-fix-provides-version-parsing.patch"
-    fi
-}
-
-fix_netfilter_kmod_clash() {
-    # OpenWrt issue #22992: kmod-nf-ipt and kmod-iptables both ship
-    # ip_tables.ko / x_tables.ko on kernel 6.18+, causing file clash.
-    #
-    # Upstream fix (dqsq2e2): keep kmod-iptables as the owner of those
-    # .ko files, and filter them out of kmod-nf-ipt's FILES/AUTOLOAD.
-    # DEPENDS must remain +!LINUX_6_12:kmod-iptables so that kmod-nf-ipt
-    # depends on kmod-iptables (which enables CONFIG_IP_NF_IPTABLES_LEGACY
-    # in the kernel, actually building ip_tables.ko).
-    #
-    # Previous AWRT workaround changed DEPENDS to exclude LINUX_6_18 as
-    # well — this prevented the file clash but also prevented ip_tables.ko
-    # from being built at all, causing "module ip_tables.ko missing" errors.
-
-    local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
-
-    if [ ! -f "$netfilter_mk" ]; then
-        echo "Netfilter makefile not found: $netfilter_mk" >&2
-        return 1
-    fi
-
-    # kernel 6.6 (openwrt-24.10) — no kmod-iptables version gate at all,
-    # iptables/nf_tables coexist without conflict, nothing to do
-    if ! grep -q 'kmod-iptables' "$netfilter_mk"; then
-        echo "Netfilter kmod clash workaround not applicable (no kmod-iptables gate found)"
-        return 0
-    fi
-
-    # Idempotent guard: filter-out already applied
-    if grep -q 'filter-out ipv4/netfilter/ip_tables netfilter/x_tables' "$netfilter_mk"; then
-        echo "Netfilter kmod filter-out workaround already applied"
-        return 0
-    fi
-
-    # Step 1: Revert any stale AWRT-style DEPENDS mangling back to upstream
-    # Old AWRT: +(!(LINUX_6_12||LINUX_6_18)):kmod-iptables — BROKEN on 6.18
-    # Upstream: +!LINUX_6_12:kmod-iptables — correct; kmod-iptables owns ip_tables.ko
-    local depends_line
-    depends_line=$(grep 'DEPENDS:=+.*:kmod-iptables' "$netfilter_mk" | head -1)
-    if echo "$depends_line" | grep -q '(LINUX_6_12.*LINUX_6_18)'; then
-        echo "Reverting AWRT netfilter DEPENDS to upstream form..."
-        sed -i '/^define KernelPackage\/nf-ipt$/,/^endef$/{
-            s/DEPENDS:=+(!(LINUX_6_12||LINUX_6_18)):kmod-iptables/DEPENDS:=+!LINUX_6_12:kmod-iptables/
-            s/DEPENDS:=+(!LINUX_6_12&&!LINUX_6_18):kmod-iptables/DEPENDS:=+!LINUX_6_12:kmod-iptables/
-        }' "$netfilter_mk"
-    fi
-
-    # Step 2: Apply filter-out to FILES and AUTOLOAD inside KernelPackage/nf-ipt
-    # Removes ip_tables.ko / x_tables.ko from kmod-nf-ipt so kmod-iptables
-    # is the sole owner — no file clash at opkg install time.
-    echo "Applying netfilter kmod filter-out workaround (upstream openwrt#22992)..."
-    sed -i '/^define KernelPackage\/nf-ipt$/,/^endef$/{
-        s|FILES:=\$(foreach mod,\$(NF_IPT-m),\$(LINUX_DIR)/net/\$(mod)\.ko)|FILES:=\$(foreach mod,\$(filter-out ipv4/netfilter/ip_tables netfilter/x_tables,\$(NF_IPT-m)),\$(LINUX_DIR)/net/\$(mod).ko)|
-        s|AUTOLOAD:=\$(call AutoProbe,\$(notdir \$(NF_IPT-m)))|AUTOLOAD:=\$(call AutoProbe,\$(notdir \$(filter-out ipv4/netfilter/ip_tables netfilter/x_tables,\$(NF_IPT-m))))|
-    }' "$netfilter_mk"
-
-    return 0
-}
-
 install_pbr_isp() {
     local isp_lower="$1"
     local isp_upper="$2"
@@ -487,8 +282,6 @@ install_pbr_isp() {
     install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}" "$pbr_dir/pbr.user.${isp_lower}"
     install -Dm644 "$BASE_PATH/patches/pbr.user.${isp_lower}6" "$pbr_dir/pbr.user.${isp_lower}6"
 
-    # Makefile: 在 Package/pbr/install 段的 endef 前插入 INSTALL_DATA 规则
-    # 注意：pbr Makefile 有多个 define...endef 块，必须只匹配 install 段的 endef
     if [ -f "$pbr_makefile" ] && ! grep -q "pbr.user.${isp_lower}" "$pbr_makefile"; then
         echo "正在修改 PBR Makefile 添加 $isp_upper 安装规则..."
         local tmp_mk=$(mktemp)
@@ -510,38 +303,30 @@ install_pbr_ctcc() { install_pbr_isp "ctcc" "CTCC"; }
 install_pbr_cucc() { install_pbr_isp "cucc" "CUCC"; }
 
 fix_pbr_ip_forward() {
-    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
-    local pbr_init_script="$pbr_pkg_dir/files/etc/init.d/pbr"
+    local dir="$BUILD_DIR/feeds/packages/net/pbr"
+    local init_script="$dir/files/etc/init.d/pbr"
+    local patch_file="$BASE_PATH/patches/019-pbr-ip-forward.patch"
 
-    if [ ! -d "$pbr_pkg_dir" ]; then
-        echo "PBR package directory not found: $pbr_pkg_dir"
-        return 1
-    fi
+    [ -f "$init_script" ] || {
+        echo "PBR init script not found"; return 1
+    }
 
-    if [ ! -f "$pbr_init_script" ]; then
-        echo "PBR init script not found: $pbr_init_script"
-        return 1
-    fi
-
-    if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$pbr_init_script"; then
+    if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$init_script"; then
         echo "PBR IP Forward fix already applied"
         return 0
     fi
 
-    if ! grep -q '\[ -n "$strict_enforcement" \] && \[ "$(cat /proc/sys/net/ipv4/ip_forward)"' "$pbr_init_script"; then
-        echo "PBR IP Forward: 未找到需要修复的代码，可能上游已修复或此版本无此问题"
+    if ! grep -q '\[ -n "$strict_enforcement" \] && \[ "$(cat /proc/sys/net/ipv4/ip_forward)"' "$init_script"; then
+        echo "PBR: 未找到需要修复的代码，跳过"
         return 0
     fi
 
-    echo "正在应用 PBR IP Forward 修复..."
-    sed -i 's/\[ -n "\$strict_enforcement" \] && \[ "\$(cat \/proc\/sys\/net\/ipv4\/ip_forward)"/\[ -n "\$enabled" \] \&\& \[ -n "\$strict_enforcement" \] \&\& \[ "\$(cat \/proc\/sys\/net\/ipv4\/ip_forward)"/' "$pbr_init_script"
-    
-    if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$pbr_init_script"; then
-        echo "PBR IP Forward 修复应用成功"
-        return 0
+    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$dir" -i "$patch_file" && echo "PBR IP Forward 修复成功" || {
+            echo "PBR IP Forward 修复失败" >&2; return 1
+        }
     else
-        echo "修复应用失败：未找到预期的修复内容"
-        return 1
+        echo "PBR: 补丁无法应用" >&2; return 1
     fi
 }
 
@@ -593,19 +378,6 @@ EOF
     fi
 }
 
-update_uwsgi_limit_as() {
-    local cgi_io_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-cgi_io.ini"
-    local webui_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-webui.ini"
-
-    if [ -f "$cgi_io_ini" ]; then
-        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$cgi_io_ini"
-    fi
-
-    if [ -f "$webui_ini" ]; then
-        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$webui_ini"
-    fi
-}
-
 remove_tweaked_packages() {
     local target_mk="$BUILD_DIR/include/target.mk"
     if [ -f "$target_mk" ]; then
@@ -616,78 +388,54 @@ remove_tweaked_packages() {
 }
 
 enable_ttyd_autologin() {
-    local ttyd_cfg="$BUILD_DIR/package/feeds/packages/ttyd/files/ttyd.config"
-    if [ -f "$ttyd_cfg" ]; then
-        sed -i 's|/bin/login|/usr/libexec/login.sh|g' "$ttyd_cfg"
-        sed -i '/option interface/d' "$ttyd_cfg"
-        echo "[ttyd] 自动登录 + 监听所有接口"
+    local dir="$BUILD_DIR/feeds/packages/utils/ttyd"
+    local patch_file="$BASE_PATH/patches/014-ttyd-autologin.patch"
+    [ -f "$dir/files/ttyd.config" ] || return 0
+    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$dir" -i "$patch_file" && echo "[ttyd] 自动登录"
     fi
 }
 
-fix_nikki_gobinpackage() {
-    # nikki 是纯配置/UI 元包（meta-package），不含 Go 源码也不应编译。
-    # mihomo 二进制由独立的 mihomo 包（GoBinPackage）编译并提供。
-    #
-    # 问题：golang-package.mk 第 293-301 行检测到 GO_PKG 非空后，
-    # 全局挂载了 Build/InstallDev=$(call GoPackage/Build/InstallDev)，而
-    # GoPackage/Build/InstallDev 内部调用 install_src，需要复制源码到
-    # .go_work/build/src/ 目录。但 nikki 没有 Go 源码（build_dir 为空），
-    # golang-build.sh configure 阶段不会创建该目录，导致 install_src 失败。
-    #
-    # nikki 的 Build/Compile 已定义为空（正确阻止编译），
-    # 但 Build/InstallDev 未在 Makefile 中定义，继承了全局挂载。
-    #
-    # 修复方法：在 $(eval ...) 调用前追加空的 Build/InstallDev，
-    # 覆盖 golang-package.mk 的全局挂载。不改变 GoBinPackage/GoPackage 类型，
-    # 不改变 Build/Compile。
-    local nikki_makefile="$(get_custom_feed_package_dir)/nikki/Makefile"
-    if [ -f "$nikki_makefile" ]; then
-        if ! grep -q '^define Build/InstallDev$' "$nikki_makefile"; then
-            # 在 $(eval $(call GoBinPackage,nikki)) 或 $(eval $(call GoPackage,nikki)) 之前插入
-            awk '
-            /^\$\(eval \$\(call Go(Bin)?Package,nikki\)\)/ {
-                print "define Build/InstallDev"
-                print "endef"
-                print ""
-            }
-            { print }
-            ' "$nikki_makefile" > "$nikki_makefile.tmp" && mv "$nikki_makefile.tmp" "$nikki_makefile"
-            echo "[nikki] Build/InstallDev 置空（覆盖 golang-package.mk 全局挂载）"
-        else
-            echo "[nikki] Build/InstallDev 已存在，跳过"
-        fi
-    fi
-}
+fix_homeproxy_patches() {
+    local cf_dir
+    cf_dir="$(get_custom_feed_source_dir)/luci-app-homeproxy"
 
-fix_homeproxy_generate_client() {
-    local cf_dir target
-    cf_dir="$(get_custom_feed_source_dir)"
-    target="$cf_dir/luci-app-homeproxy/root/etc/homeproxy/scripts/generate_client.uc"
-    local patch_file="$BASE_PATH/patches/003-homeproxy-singbox-1.13-sniff.patch"
-
-    [ -f "$target" ] || {
-        echo "[homeproxy] generate_client.uc 未找到，跳过"
+    [ -d "$cf_dir" ] || {
+        echo "[homeproxy] luci-app-homeproxy 未找到，跳过"
         return 0
     }
 
-    if patch --dry-run -p1 -f -i "$patch_file" "$target" >/dev/null 2>&1; then
-        patch -p1 -i "$patch_file" "$target" && 
-            echo "[homeproxy] sniff fix 已应用（sing-box 1.13+）" || {
-            echo "错误：sniff fix 补丁应用失败" >&2
-            return 1
-        }
-    elif grep -q "action.*sniff" "$target"; then
-        echo "[homeproxy] sniff fix 已存在，跳过"
-    else
-        echo "错误：sniff fix 补丁无法应用（文件可能已被修改）" >&2
-        return 1
-    fi
+    local patches=(
+        "$BASE_PATH/patches/003-homeproxy-singbox-1.13-sniff.patch"
+        "$BASE_PATH/patches/004-homeproxy-js-validator.patch"
+        "$BASE_PATH/patches/005-homeproxy-client-ui.patch"
+        "$BASE_PATH/patches/006-homeproxy-node-ui.patch"
+        "$BASE_PATH/patches/007-homeproxy-uci-defaults.patch"
+        "$BASE_PATH/patches/008-homeproxy-generate-client.patch"
+        "$BASE_PATH/patches/009-homeproxy-migrate-config.patch"
+    )
+
+    for patch in "${patches[@]}"; do
+        [ -f "$patch" ] || continue
+
+        if patch --dry-run -p1 -d "$cf_dir" -i "$patch" >/dev/null 2>&1; then
+            patch -p1 -d "$cf_dir" -i "$patch" &&
+                echo "[homeproxy] $(basename $patch) 已应用" ||
+                echo "[homeproxy] 警告：$(basename $patch) 应用失败" >&2
+        elif grep -q "homeproxy" "$cf_dir/root/etc/homeproxy/scripts/homeproxy.uc" 2>/dev/null; then
+            echo "[homeproxy] $(basename $patch) 已存在，跳过"
+        else
+            echo "[homeproxy] 警告：$(basename $patch) 无法应用，跳过" >&2
+        fi
+    done
 }
 
 fix_bandix_default_enabled() {
-    local bandix_config="$(get_custom_feed_source_dir)/openwrt-bandix/files/bandix.config"
-    if [ -f "$bandix_config" ]; then
-        sed -i "s/option enabled '0'/option enabled '1'/g" "$bandix_config"
-        echo "[bandix] traffic/connections/dns 默认已启用 ($bandix_config)"
+    local dir="$BASE_PATH/patches"
+    local cf_dir="$(get_custom_feed_source_dir)/openwrt-bandix"
+    local patch_file="$dir/011-bandix-default-enabled.patch"
+    [ -f "$cf_dir/files/bandix.config" ] || return 0
+    if patch --dry-run -p1 -d "$cf_dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$cf_dir" -i "$patch_file" && echo "[bandix] 默认启用"
     fi
 }

@@ -1,0 +1,11 @@
+--- --- a/root/usr/share/luci/menu.d/luci-app-dockerman.json	2026-06-08 14:32:16.118794570 +0800
++++ +++ b/root/usr/share/luci/menu.d/luci-app-dockerman.json	2026-06-08 14:32:27.358785212 +0800
+@@ -1,7 +1,7 @@
+ {
+ 	"admin/dockerman": {
+ 		"title": "Docker",
+-		"order": "40",
++		"order": 40,
+ 		"action": {
+ 			"type": "firstchild"
+ 		},

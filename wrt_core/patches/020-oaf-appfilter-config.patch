@@ -1,0 +1,11 @@
+--- --- a/files/appfilter.config	2026-06-08 14:44:07.663481431 +0800
++++ +++ b/files/appfilter.config	2026-06-08 14:44:18.465410830 +0800
+@@ -1,7 +1,7 @@
+ config global global
+ 	option enable '0'
+ 	option work_mode '0'
+-	option record_enable '1'
++	option record_enable '0'
+ 	option disable_hnat '0'
+ 	option tcp_rst '1'
+ 	option lan_ifname 'br-lan'
