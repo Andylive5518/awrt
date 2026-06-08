@@ -66,6 +66,7 @@ main() {
     fix_dockerman_events_timeout
     fix_dockerman_rpc_events_timeout
     fix_bandix_default_enabled
+    fix_nikki_gobinpackage
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
