@@ -66,13 +66,13 @@ main() {
     fix_dockerman_events_timeout
     fix_dockerman_rpc_events_timeout
     fix_bandix_default_enabled
-    fix_nikki_gobinpackage
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
     verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_docker_uc_stream_timeout "$BUILD_DIR"
+    fix_nikki_gobinpackage
     ## fix_cups_libcups_avahi_depends
     install_pbr_cmcc
     install_pbr_ctcc
