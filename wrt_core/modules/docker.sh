@@ -954,4 +954,10 @@ docker_stack_sync_nftables_compat() {
 
     _docker_stack_set_or_append_sysctl_value "$dockerd_sysctl" "net.ipv4.ip_forward" "1" || return 1
     _docker_stack_set_or_append_sysctl_value "$dockerd_sysctl" "net.ipv6.conf.all.forwarding" "1" || return 1
+
+    # Docker 操作（pull/build）可能持续数分钟
+    # 通过 uci-defaults 提升 rpcd/uhhtpd 超时作为安全兜底
+    install -Dm544 "$BASE_PATH/patches/992-docker-service-timeouts" \
+        "$build_dir/package/base-files/files/etc/uci-defaults/992-docker-service-timeouts"
+    echo "docker 服务超时 uci-defaults 已安装（rpcd=300s, uhttpd network=300s）"
 }
