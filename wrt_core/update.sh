@@ -57,7 +57,6 @@ main() {
     fix_quickstart
     update_oaf_deconfig
     ## add_quickfile
-    update_smartdns
     ## update_dockerman
     ## set_nginx_default_config
     install_opkg_distfeeds
@@ -72,6 +71,7 @@ main() {
     verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_docker_uc_stream_timeout "$BUILD_DIR"
+    update_smartdns
     fix_nikki_gobinpackage
     ## fix_cups_libcups_avahi_depends
     install_pbr_cmcc
