@@ -181,7 +181,7 @@ install_custom_feed() {
         msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo \
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
-        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix \
+        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
         luci-lib-docker luci-app-dockerman luci-app-diskman smartdns luci-app-smartdns \
         luci-theme-argon luci-app-argon-config
     )
@@ -206,7 +206,7 @@ install_custom_feed() {
 
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
-        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata luci-app-quickfile"
+        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata adguardhome"
     )
 
     feeds_path=$(get_feeds_path)
