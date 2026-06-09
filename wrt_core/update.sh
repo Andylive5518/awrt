@@ -40,45 +40,33 @@ main() {
     reset_feeds_conf
     update_feeds
     remove_unwanted_packages
-    remove_tweaked_packages
     install_custom_feed
     fix_homeproxy_patches
     fix_default_set
     fix_miniupnpd
     update_golang
-    change_dnsmasq2full
     fix_mk_def_depends
     update_default_lan_addr
     remove_something_nss_kmod
     update_affinity_script
     update_ath11k_fw
-    change_cpuusage
-    update_tcping
     add_ax6600_led
     set_custom_task
     apply_passwall_tweaks
-    update_nss_pbuf_performance
     set_build_signature
     update_nss_diag
     update_menu_location
-    fix_compile_coremark
     update_dnsmasq_conf
-    add_backup_info_to_sysupgrade
     update_mosdns_deconfig
     fix_quickstart
     update_oaf_deconfig
-    add_timecontrol
     add_quickfile
-    update_lucky
     fix_rust_compile_error
-    # update_smartdns
-    # update_diskman
-    # update_dockerman
+    update_smartdns
     patch_smartdns
-    update_dockerman_mirrors
+    # update_dockerman
     set_nginx_default_config
     update_uwsgi_limit_as
-    update_argon
     update_nginx_ubus_module
     check_default_settings
     install_opkg_distfeeds
@@ -90,20 +78,16 @@ main() {
     verify_custom_feed_installed_paths
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_docker_uc_stream_timeout "$BUILD_DIR"
-    fix_cups_libcups_avahi_depends
+    # fix_cups_libcups_avahi_depends
     fix_easytier_lua
-    update_adguardhome
     update_script_priority
     update_geoip
-    fix_openssl_ktls
     fix_opkg_check
-    fix_netfilter_kmod_clash
     install_pbr_cmcc
     install_pbr_ctcc
     install_pbr_cucc
     enable_ttyd_autologin
     fix_nikki_gobinpackage
-    # fix_tuic_downgrade
     fix_pbr_ip_forward
 }
 
