@@ -225,6 +225,8 @@ apply_passwall_tweaks() {
 install_opkg_distfeeds() {
     local emortal_def_dir="$BUILD_DIR/package/emortal/default-settings"
     local distfeeds_conf="$emortal_def_dir/files/99-distfeeds.conf"
+    local apk_repos_dir="$BUILD_DIR/package/base-files/files/etc/apk/repositories.d"
+    local apk_repos_file="$apk_repos_dir/distfeeds.list"
     local ver_file="$BUILD_DIR/include/version.mk"
 
     local version_number
@@ -240,12 +242,23 @@ install_opkg_distfeeds() {
     version_number=$(echo "$raw_version" | sed 's/^\([0-9]*\.[0-9]*\).*/\1-SNAPSHOT/')
 
     if [ -d "$emortal_def_dir" ]; then
+        # opkg 格式（src/gz 前缀）
         cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/base/
-src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/luci/
-src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/packages/
-src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/routing/
-src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/telephony/
+src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/base
+src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/luci
+src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/packages
+src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/routing
+src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/telephony
+EOF
+
+        # APK 格式（纯 URL）
+        mkdir -p "$apk_repos_dir"
+        cat >"$apk_repos_file" <<EOF
+https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/base
+https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/luci
+https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/packages
+https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/routing
+https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/telephony
 EOF
 
         if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
@@ -255,10 +268,12 @@ EOF
 
             sed -i "/exit 0/i\\
 [ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
-sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+sed -i '/^option check_signature/d' /etc/opkg.conf\\
+echo 'option check_signature 0' >> /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
         fi
 
         echo "[opkg] distfeeds 已生成：${version_number} (arch: aarch64_cortex-a53)"
+        echo "[apk]  distfeeds.list 已生成：${version_number}"
     fi
 
     local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
