@@ -117,7 +117,8 @@ EOF
 
             sed -i "/exit 0/i\\
 [ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
-sed -ri '/check_signature/s@^[^#]@#&@' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+sed -i '/^option check_signature/d' /etc/opkg.conf\\
+echo 'option check_signature 0' >> /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
         fi
 
         echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: x86_64, raw: ${raw_version})"
