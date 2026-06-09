@@ -93,6 +93,8 @@ apply_passwall_tweaks() {
 install_opkg_distfeeds() {
     local emortal_def_dir="$BUILD_DIR/package/emortal/default-settings"
     local distfeeds_conf="$emortal_def_dir/files/99-distfeeds.conf"
+    local apk_repos_dir="$BUILD_DIR/package/base-files/files/etc/apk/repositories.d"
+    local apk_repos_file="$apk_repos_dir/distfeeds.list"
     local ver_file="$BUILD_DIR/include/version.mk"
 
     local version_number
@@ -102,12 +104,23 @@ install_opkg_distfeeds() {
     version_number="$raw_version"
 
     if [ -d "$emortal_def_dir" ]; then
+        # opkg 格式（src/gz 前缀）
         cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/base/
-src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/luci/
-src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/packages/
-src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/routing/
-src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony/
+src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/base
+src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/luci
+src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/packages
+src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/routing
+src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony
+EOF
+
+        # APK 格式（纯 URL，无前缀）
+        mkdir -p "$apk_repos_dir"
+        cat >"$apk_repos_file" <<EOF
+https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/base
+https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/luci
+https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/packages
+https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/routing
+https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony
 EOF
 
         if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
@@ -122,6 +135,7 @@ echo 'option check_signature 0' >> /etc/opkg.conf\n" $emortal_def_dir/files/99-d
         fi
 
         echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: x86_64, raw: ${raw_version})"
+        echo "[apk]  distfeeds.list 已生成：${version_number}"
     fi
 
     if [ -n "$version_number" ]; then
