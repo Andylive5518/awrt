@@ -440,22 +440,6 @@ fix_bandix_default_enabled() {
 }
 
 fix_nikki_gobinpackage() {
-
-fix_luci_app_store_apk_version() {
-    local dir="$(get_custom_feed_source_dir)/luci-app-store"
-    local patch_file="$BASE_PATH/patches/997-store-apk-version.patch"
-    [ -f "$dir/Makefile" ] || { echo "[store] luci-app-store 未找到，跳过"; return 0; }
-    if grep -q "PKG_VERSION:=0.1.32.1" "$dir/Makefile" 2>/dev/null; then
-        echo "[store] APK 版本修复已存在，跳过"
-        return 0
-    fi
-    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
-        patch -p1 -d "$dir" -i "$patch_file" && echo "[store] APK 版本修复：0.1.32.1"
-    else
-        echo "[store] 警告：版本补丁无法应用" >&2
-        return 1
-    fi
-}
     local dir="$(get_custom_feed_package_dir)/nikki"
     local patch_file="$BASE_PATH/patches/022-nikki-build-install.patch"
     [ -f "$dir/Makefile" ] || return 0

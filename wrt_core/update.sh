@@ -41,7 +41,6 @@ main() {
     update_feeds
     remove_unwanted_packages
     install_custom_feed
-    fix_luci_app_store_apk_version
     fix_homeproxy_patches
     fix_default_set
     fix_miniupnpd
@@ -77,6 +76,7 @@ main() {
     fix_kconfig_recursive_dependency
     install_feeds
     verify_custom_feed_installed_paths
+    fix_apk_package_versions
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_docker_uc_stream_timeout "$BUILD_DIR"
     # fix_cups_libcups_avahi_depends
