@@ -186,7 +186,7 @@ install_custom_feed() {
         luci-theme-argon luci-app-argon-config
     )
     local required_feed_dirs=(
-        v2ray-core v2ray-geodata adguardhome
+        v2ray-core v2ray-geodata
     )
     local custom_feed_sources=()
     local missing_feed_dirs=()
@@ -206,7 +206,7 @@ install_custom_feed() {
 
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
-        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata adguardhome"
+        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata"
     )
 
     feeds_path=$(get_feeds_path)
