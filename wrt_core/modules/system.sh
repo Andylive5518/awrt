@@ -27,6 +27,13 @@ fix_miniupnpd() {
     fi
 }
 
+fix_mk_def_depends() {
+    sed -i 's/libustream-mbedtls/libustream-openssl/g' "$BUILD_DIR/include/target.mk" 2>/dev/null
+    if [ -f "$BUILD_DIR/target/linux/qualcommax/Makefile" ]; then
+        sed -i 's/wpad-openssl/wpad-mesh-openssl/g' "$BUILD_DIR/target/linux/qualcommax/Makefile"
+    fi
+}
+
 change_dnsmasq2full() {
     if ! grep -q "dnsmasq-full" $BUILD_DIR/include/target.mk; then
         sed -i 's/dnsmasq/dnsmasq-full/g' ./include/target.mk
