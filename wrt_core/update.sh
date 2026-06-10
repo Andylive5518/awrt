@@ -41,6 +41,7 @@ main() {
     update_feeds
     remove_unwanted_packages
     install_custom_feed
+    fix_luci_app_store_apk_version
     fix_homeproxy_patches
     fix_default_set
     fix_miniupnpd
