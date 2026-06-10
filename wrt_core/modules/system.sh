@@ -487,3 +487,19 @@ fix_apk_package_versions() {
         fi
     done
 }
+
+fix_apk_file_conflicts() {
+    local custom_feed_dir pkg init_script
+
+    grep -q '^CONFIG_USE_APK=y' "$CONFIG_FILE" 2>/dev/null || return 0
+
+    custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
+
+    # luci-app-adguardhome 依赖 +adguardhome，init 脚本应由 adguardhome 包独家提供
+    # 删除 luci-app-adguardhome 中重复的 init 脚本，避免 APK 文件冲突
+    init_script="$custom_feed_dir/luci-app-adguardhome/root/etc/init.d/adguardhome"
+    if [ -f "$init_script" ]; then
+        \rm -f "$init_script"
+        echo "  luci-app-adguardhome: 已移除重复的 init 脚本（由 adguardhome 包提供）"
+    fi
+}
