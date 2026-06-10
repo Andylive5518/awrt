@@ -470,3 +470,26 @@ fix_nikki_gobinpackage() {
         return 1
     fi
 }
+
+fix_apk_package_versions() {
+    local custom_feed_dir
+    custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)" || return 0
+
+    if ! grep -q '^CONFIG_USE_APK=y' "${BUILD_DIR}/.config" 2>/dev/null; then
+        return 0
+    fi
+
+    echo "检测到 APK 包管理器，修复不兼容的版本号格式..."
+
+    local luci_lib_docker_makefile="$custom_feed_dir/luci-lib-docker/Makefile"
+    local patch_file="$BASE_PATH/patches/021-luci-lib-docker-apk-version.patch"
+
+    if [ -f "$luci_lib_docker_makefile" ] && [ -f "$patch_file" ]; then
+        if patch --dry-run -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" >/dev/null 2>&1; then
+            patch -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" && \
+                echo "  luci-lib-docker 版本号已修复（v0.3.4 → 0.3.4，APK 兼容）"
+        else
+            echo "  luci-lib-docker 版本号补丁无需应用，跳过"
+        fi
+    fi
+}

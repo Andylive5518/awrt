@@ -69,6 +69,7 @@ main() {
     fix_kconfig_recursive_dependency
     install_feeds
     verify_custom_feed_installed_paths
+    fix_apk_package_versions
     docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     fix_docker_uc_stream_timeout "$BUILD_DIR"
     update_smartdns
