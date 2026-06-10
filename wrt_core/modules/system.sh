@@ -96,67 +96,51 @@ install_opkg_distfeeds() {
     local apk_repos_dir="$BUILD_DIR/package/base-files/files/etc/apk/repositories.d"
     local apk_repos_file="$apk_repos_dir/distfeeds.list"
     local ver_file="$BUILD_DIR/include/version.mk"
+    local repo mirror_replaced=0
 
+    # 提取版本号：VERSION_NUMBER:=$(VERSION_NUMBER,5.15.150)
     local version_number
-
-    local raw_version
-    raw_version=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
-    version_number="$raw_version"
+    version_number=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
 
     if [ -d "$emortal_def_dir" ]; then
-        # opkg 格式（src/gz 前缀）
-        cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/base
-src/gz openwrt_luci https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/luci
-src/gz openwrt_packages https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/packages
-src/gz openwrt_routing https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/routing
-src/gz openwrt_telephony https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony
-EOF
-
-        # APK 格式（纯 URL，无前缀）
+        # 生成 opkg 和 APK 两种格式的软件源配置
         mkdir -p "$apk_repos_dir"
-        cat >"$apk_repos_file" <<EOF
-https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/base
-https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/luci
-https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/packages
-https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/routing
-https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/telephony
-EOF
+        : > "$distfeeds_conf"
+        : > "$apk_repos_file"
+        for repo in base luci packages routing telephony; do
+            local url="https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/${repo}"
+            echo "src/gz openwrt_${repo} ${url}" >> "$distfeeds_conf"
+            echo "$url" >> "$apk_repos_file"
+        done
 
         if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
             sed -i "/define Package\/default-settings\/install/a\\
 \t\$(INSTALL_DIR) \$(1)/etc\\
-\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" $emortal_def_dir/Makefile
+\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" "$emortal_def_dir/Makefile"
 
             sed -i "/exit 0/i\\
 [ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
 sed -i '/^option check_signature/d' /etc/opkg.conf\\
-echo 'option check_signature 0' >> /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+echo 'option check_signature 0' >> /etc/opkg.conf\n" "$emortal_def_dir/files/99-default-settings"
         fi
 
-        echo "[opkg] 99-distfeeds.conf 已生成：${version_number} (arch: x86_64, raw: ${raw_version})"
+        echo "[opkg] 99-distfeeds.conf 已生成：${version_number}"
         echo "[apk]  distfeeds.list 已生成：${version_number}"
     fi
 
     if [ -n "$version_number" ]; then
-        local fixed=0
+        # 替换源码中所有硬编码的版本号和镜像地址
         while IFS= read -r -d '' f; do
             sed -i 's|$(call qstrip,$(CONFIG_VERSION_NUMBER))|'"${version_number}"'|g' "$f"
             sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
-            fixed=1
+            mirror_replaced=1
         done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
             -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
             -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
 
-        if [ "$fixed" = "1" ]; then
-            echo "[opkg] distfeeds 模板已修复：${version_number} (arch: x86_64)"
+        if [ "$mirror_replaced" = "1" ]; then
+            echo "[mirror] 版本号和镜像源已替换为官方源：${version_number}"
         fi
-    fi
-
-    local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
-    if [ -f "$chn_settings" ]; then
-        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://downloads.immortalwrt.org|g' "$chn_settings"
-        echo "[mirror] 99-default-settings-chinese 镜像已改为官方"
     fi
 }
 
