@@ -40,18 +40,11 @@ if [ "$current_config" = "/etc/adguardhome.yaml" ] || [ -z "$current_config" ]; 
     uci -q set adguardhome.config.config='/etc/adguardhome/adguardhome.yaml'
 fi
 
-if ! uci -q get adguardhome.config.web_username >/dev/null 2>&1; then
-    uci -q set adguardhome.config.web_username='admin'
-fi
-if ! uci -q get adguardhome.config.web_password >/dev/null 2>&1; then
-    uci -q set adguardhome.config.web_password='admin'
-fi
-if ! uci -q get adguardhome.config.username >/dev/null 2>&1; then
-    uci -q set adguardhome.config.username='admin'
-fi
-if ! uci -q get adguardhome.config.password >/dev/null 2>&1; then
-    uci -q set adguardhome.config.password='admin'
-fi
+for field in web_username web_password username password; do
+    if ! uci -q get "adguardhome.config.${field}" >/dev/null 2>&1; then
+        uci -q set "adguardhome.config.${field}=admin"
+    fi
+done
 
 uci commit adguardhome
 exit 0
