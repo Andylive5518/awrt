@@ -510,3 +510,209 @@ fix_apk_file_conflicts() {
         echo "  luci-app-adguardhome: 已移除重复的 init 脚本（由 adguardhome 包提供）"
     fi
 }
+
+remove_something_nss_kmod() {
+    local ipq_mk_path="$BUILD_DIR/target/linux/qualcommax/Makefile"
+    local target_mks=("$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk" "$BUILD_DIR/target/linux/qualcommax/ipq807x/target.mk")
+
+    for target_mk in "${target_mks[@]}"; do
+        if [ -f "$target_mk" ]; then
+            sed -i 's/kmod-qca-nss-crypto//g' "$target_mk"
+        fi
+    done
+
+    if [ -f "$ipq_mk_path" ]; then
+        sed -i '/kmod-qca-nss-drv-eogremgr/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-gre/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-map-t/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-match/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-mirror/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-tun6rd/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-tunipip6/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-vxlanmgr/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-drv-wifi-meshmgr/d' "$ipq_mk_path"
+        sed -i '/kmod-qca-nss-macsec/d' "$ipq_mk_path"
+
+        sed -i 's/automount //g' "$ipq_mk_path"
+        sed -i 's/cpufreq //g' "$ipq_mk_path"
+    fi
+}
+
+update_affinity_script() {
+    local affinity_script_dir="$BUILD_DIR/target/linux/qualcommax"
+
+    if [ -d "$affinity_script_dir" ]; then
+        find "$affinity_script_dir" -name "set-irq-affinity" -exec rm -f {} \;
+        find "$affinity_script_dir" -name "smp_affinity" -exec rm -f {} \;
+        install -Dm755 "$BASE_PATH/patches/smp_affinity" "$affinity_script_dir/base-files/etc/init.d/smp_affinity"
+    fi
+}
+
+update_ath11k_fw() {
+    local makefile="$BUILD_DIR/package/firmware/ath11k-firmware/Makefile"
+    local local_mk="$BASE_PATH/patches/ath11k_fw.mk"
+    local url="https://raw.githubusercontent.com/VIKINGYFY/immortalwrt/refs/heads/main/package/firmware/ath11k-firmware/Makefile"
+
+    if [ ! -d "$(dirname "$makefile")" ]; then
+        echo "ath11k-firmware 目录不存在，非 ipq60xx 目标，跳过更新" >&2
+        return 0
+    fi
+
+    echo "正在更新 ath11k-firmware Makefile..."
+
+    local tmp_mk
+    tmp_mk=$(mktemp) || { echo "错误：无法创建临时文件" >&2; exit 1; }
+
+    # Download upstream Makefile; fall back to local copy on failure
+    if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url"; then
+        echo "警告：从 $url 下载失败，使用本地 ath11k-firmware Makefile" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：无法从远程下载，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    if [ ! -s "$tmp_mk" ]; then
+        echo "警告：下载的 ath11k-firmware Makefile 为空，使用本地备用文件" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：下载的文件为空，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    if ! grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
+        echo "警告：下载的 Makefile 缺少 PKG_MIRROR_HASH，使用本地备用文件" >&2
+        rm -f "$tmp_mk"
+        if [ -f "$local_mk" ]; then
+            cp -f "$local_mk" "$makefile"
+            return 0
+        fi
+        echo "错误：下载的文件格式无效，本地备用文件也不存在" >&2
+        exit 1
+    fi
+
+    mv -f "$tmp_mk" "$makefile"
+    rm -f "$tmp_mk"
+}
+
+update_nss_diag() {
+    local file="$BUILD_DIR/package/kernel/mac80211/files/nss_diag.sh"
+    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
+        \rm -f "$file"
+        install -Dm755 "$BASE_PATH/patches/nss_diag.sh" "$file"
+    fi
+}
+
+update_script_priority() {
+    local qca_drv_path="$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
+    if [ -d "${qca_drv_path%/*}" ] && [ -f "$qca_drv_path" ]; then
+        sed -i 's/START=.*/START=88/g' "$qca_drv_path"
+    fi
+
+    local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/qca-nss-pbuf.init"
+    if [ -d "${pbuf_path%/*}" ] && [ -f "$pbuf_path" ]; then
+        sed -i 's/START=.*/START=89/g' "$pbuf_path"
+    fi
+
+    local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
+    if [ -d "${mosdns_path%/*}" ] && [ -f "$mosdns_path" ]; then
+        sed -i 's/START=.*/START=94/g' "$mosdns_path"
+    fi
+}
+
+update_mosdns_deconfig() {
+    local mosdns_conf="$(get_custom_feed_worktree_dir)/luci-app-mosdns/root/etc/config/mosdns"
+    if [ -d "${mosdns_conf%/*}" ] && [ -f "$mosdns_conf" ]; then
+        sed -i 's/8000/300/g' "$mosdns_conf"
+        sed -i 's/5335/5336/g' "$mosdns_conf"
+    fi
+}
+
+update_geoip() {
+    local geodata_path="$(get_custom_feed_package_dir)/v2ray-geodata/Makefile"
+    if [ -d "${geodata_path%/*}" ] && [ -f "$geodata_path" ]; then
+        local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' "$geodata_path" | grep -oE "[0-9]{1,}")
+        if [ -n "$GEOIP_VER" ]; then
+            local base_url="https://github.com/v2fly/geoip/releases/download/${GEOIP_VER}"
+            local old_SHA256
+            if ! old_SHA256=$(wget -qO- "$base_url/geoip.dat.sha256sum" | awk '{print $1}'); then
+                echo "错误：从 $base_url/geoip.dat.sha256sum 获取旧的 geoip.dat 校验和失败" >&2
+                return 1
+            fi
+            local new_SHA256
+            if ! new_SHA256=$(wget -qO- "$base_url/geoip-only-cn-private.dat.sha256sum" | awk '{print $1}'); then
+                echo "错误：从 $base_url/geoip-only-cn-private.dat.sha256sum 获取新的 geoip-only-cn-private.dat 校验和失败" >&2
+                return 1
+            fi
+            if [ -n "$old_SHA256" ] && [ -n "$new_SHA256" ]; then
+                if grep -q "$old_SHA256" "$geodata_path"; then
+                    sed -i "s|=geoip.dat|=geoip-only-cn-private.dat|g" "$geodata_path"
+                    sed -i "s/$old_SHA256/$new_SHA256/g" "$geodata_path"
+                fi
+            fi
+        fi
+    fi
+}
+
+fix_rust_compile_error() {
+    if [ -f "$BUILD_DIR/feeds/packages/lang/rust/Makefile" ]; then
+        sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$BUILD_DIR/feeds/packages/lang/rust/Makefile"
+    fi
+}
+
+fix_easytier_mk() {
+    local mk_path="$(get_custom_feed_worktree_dir)/luci-app-easytier/easytier/Makefile"
+    if [ -f "$mk_path" ]; then
+        sed -i 's/!@(mips||mipsel)/!TARGET_mips \&\& !TARGET_mipsel/g' "$mk_path"
+    fi
+}
+
+fix_easytier_lua() {
+    local file_path="$(get_custom_feed_package_dir)/luci-app-easytier/luasrc/model/cbi/easytier.lua"
+    if [ -f "$file_path" ]; then
+        sed -i 's/util.pcdata/xml.pcdata/g' "$file_path"
+    fi
+}
+
+update_nginx_ubus_module() {
+    local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
+    local source_date="2024-03-02"
+    local source_version="564fa3e9c2b04ea298ea659b793480415da26415"
+    local mirror_hash="92c9ab94d88a2fe8d7d1e8a15d15cfc4d529fdc357ed96d22b65d5da3dd24d7f"
+
+    if [ -f "$makefile_path" ]; then
+        sed -i "s/SOURCE_DATE:=2020-09-06/SOURCE_DATE:=$source_date/g" "$makefile_path"
+        sed -i "s/SOURCE_VERSION:=b2d7260dcb428b2fb65540edb28d7538602b4a26/SOURCE_VERSION:=$source_version/g" "$makefile_path"
+        sed -i "s/MIRROR_HASH:=515bb9d355ad80916f594046a45c190a68fb6554d6795a54ca15cab8bdd12fda/MIRROR_HASH:=$mirror_hash/g" "$makefile_path"
+        echo "已更新 nginx-mod-ubus 模块的 SOURCE_DATE, SOURCE_VERSION 和 MIRROR_HASH。"
+    else
+        echo "错误：未找到 $makefile_path 文件，无法更新 nginx-mod-ubus 模块。" >&2
+    fi
+}
+
+fix_opkg_check() {
+    local patch_file="$BASE_PATH/patches/001-fix-provides-version-parsing.patch"
+    local opkg_dir="$BUILD_DIR/package/system/opkg"
+    if [ -f "$patch_file" ]; then
+        install -Dm644 "$patch_file" "$opkg_dir/patches/001-fix-provides-version-parsing.patch"
+    fi
+}
+
+update_uwsgi_limit_as() {
+    local cgi_io_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-cgi_io.ini"
+    local webui_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-webui.ini"
+
+    if [ -f "$cgi_io_ini" ]; then
+        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$cgi_io_ini"
+    fi
+
+    if [ -f "$webui_ini" ]; then
+        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$webui_ini"
+    fi
+}
