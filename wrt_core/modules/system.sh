@@ -7,7 +7,7 @@ fix_default_set() {
 
     install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
     install -Dm544 "$BASE_PATH/patches/991_custom_settings" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/991_custom_settings"
-    install -Dm544 "$BASE_PATH/patches/992_set-wifi-uci.sh" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/992_set-wifi-uci.sh"
+    # install -Dm544 "$BASE_PATH/patches/993_ddns-go-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/993_ddns-go-config"
     install -Dm544 "$BASE_PATH/patches/994_adguardhome-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/994_adguardhome-config"
     install -Dm544 "$BASE_PATH/patches/995_pbr_isp_config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/995_pbr_isp_config"
 
@@ -27,9 +27,9 @@ fix_miniupnpd() {
     fi
 }
 
-fix_mk_def_depends() {
-    if [ -f $BUILD_DIR/target/linux/qualcommax/Makefile ]; then
-        sed -i 's/wpad-openssl/wpad-mesh-openssl/g' $BUILD_DIR/target/linux/qualcommax/Makefile
+change_dnsmasq2full() {
+    if ! grep -q "dnsmasq-full" $BUILD_DIR/include/target.mk; then
+        sed -i 's/dnsmasq/dnsmasq-full/g' ./include/target.mk
     fi
 }
 
@@ -46,138 +46,6 @@ update_default_lan_addr() {
     if [ -f "$CFG_PATH" ]; then
         sed -i "s/192\.168\.[0-9]*\.[0-9]*/${LAN_ADDR}/g" "$CFG_PATH"
     fi
-}
-
-remove_something_nss_kmod() {
-    local ipq_mk_path="$BUILD_DIR/target/linux/qualcommax/Makefile"
-    local target_mks=("$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk" "$BUILD_DIR/target/linux/qualcommax/ipq807x/target.mk")
-
-    for target_mk in "${target_mks[@]}"; do
-        if [ -f "$target_mk" ]; then
-            sed -i 's/kmod-qca-nss-crypto//g' "$target_mk"
-        fi
-    done
-
-    if [ -f "$ipq_mk_path" ]; then
-        sed -i '/kmod-qca-nss-drv-eogremgr/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-gre/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-map-t/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-match/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-mirror/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-tun6rd/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-tunipip6/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-vxlanmgr/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-drv-wifi-meshmgr/d' "$ipq_mk_path"
-        sed -i '/kmod-qca-nss-macsec/d' "$ipq_mk_path"
-
-        sed -i 's/automount //g' "$ipq_mk_path"
-        sed -i 's/cpufreq //g' "$ipq_mk_path"
-    fi
-}
-
-update_affinity_script() {
-    local affinity_script_dir="$BUILD_DIR/target/linux/qualcommax"
-
-    if [ -d "$affinity_script_dir" ]; then
-        find "$affinity_script_dir" -name "set-irq-affinity" -exec rm -f {} \;
-        find "$affinity_script_dir" -name "smp_affinity" -exec rm -f {} \;
-        install -Dm755 "$BASE_PATH/patches/smp_affinity" "$affinity_script_dir/base-files/etc/init.d/smp_affinity"
-    fi
-}
-
-update_ath11k_fw() {
-    local makefile="$BUILD_DIR/package/firmware/ath11k-firmware/Makefile"
-    local local_mk="$BASE_PATH/patches/ath11k_fw.mk"
-    local url="https://raw.githubusercontent.com/VIKINGYFY/immortalwrt/refs/heads/main/package/firmware/ath11k-firmware/Makefile"
-
-    if [ ! -d "$(dirname "$makefile")" ]; then
-        echo "ath11k-firmware 目录不存在，非 ipq60xx 目标，跳过更新" >&2
-        return 0
-    fi
-
-    echo "正在更新 ath11k-firmware Makefile..."
-
-    local tmp_mk
-    tmp_mk=$(mktemp) || { echo "错误：无法创建临时文件" >&2; exit 1; }
-
-    # Download upstream Makefile; fall back to local copy on failure
-    if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url"; then
-        echo "警告：从 $url 下载失败，使用本地 ath11k-firmware Makefile" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：无法从远程下载，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    if [ ! -s "$tmp_mk" ]; then
-        echo "警告：下载的 ath11k-firmware Makefile 为空，使用本地备用文件" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：下载的文件为空，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    # Validate: the downloaded Makefile must have a PKG_MIRROR_HASH line
-    if ! grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
-        echo "警告：下载的 Makefile 缺少 PKG_MIRROR_HASH，使用本地备用文件" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：下载的文件格式无效，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    mv -f "$tmp_mk" "$makefile"
-    rm -f "$tmp_mk"
-}
-
-update_util_linux() {
-    local util_linux_dir="$BUILD_DIR/package/utils/util-linux"
-    local makefile_url="https://raw.githubusercontent.com/ZqinKing/immortalwrt/master/package/utils/util-linux/Makefile"
-    local tmp_makefile="/tmp/util-linux-Makefile-$$.mk"
-
-    if [ ! -d "$util_linux_dir" ]; then
-        echo "util-linux 目录不存在，跳过更新: $util_linux_dir"
-        return 0
-    fi
-
-    echo "正在更新 util-linux..."
-
-    if ! curl -fsSL -o "$tmp_makefile" "$makefile_url"; then
-        echo "错误：从 $makefile_url 下载 util-linux Makefile 失败" >&2
-        rm -f "$tmp_makefile"
-        return 1
-    fi
-
-    local ver
-    ver=$(grep -m1 "^PKG_VERSION" "$tmp_makefile" 2>/dev/null | sed 's/.*:=//' | tr -d ' ')
-    if [ "$ver" != "2.41.1" ]; then
-        echo "错误：ZqinKing 的 util-linux 版本已是 $ver（不是预期的 2.41.1），AT_HANDLE_FID 问题可能仍存在，停止更新。" >&2
-        echo "提示：请确认 ZqinKing 是否已同步上游，或手动检查 https://github.com/ZqinKing/immortalwrt/commits/master/package/utils/util-linux" >&2
-        rm -f "$tmp_makefile"
-        exit 1
-    fi
-
-    mv -f "$tmp_makefile" "$util_linux_dir/Makefile"
-
-    local patches_dir="$util_linux_dir/patches"
-    if [ -d "$patches_dir" ]; then
-        local zqin_patches_url="https://api.github.com/repos/ZqinKing/immortalwrt/contents/package/utils/util-linux/patches?ref=master"
-        if curl -fsSL "$zqin_patches_url" >/dev/null 2>&1; then
-            echo "正在更新 util-linux patches..."
-            find "$patches_dir" -maxdepth 1 -type f -name "[0-9][0-9][0-9]-*.patch" -exec rm -f {} \; 2>/dev/null || true
-        fi
-    fi
-
-    echo "util-linux 已更新到 ZqinKing 版本 ($ver)"
 }
 
 set_custom_task() {
@@ -228,58 +96,51 @@ install_opkg_distfeeds() {
     local apk_repos_dir="$BUILD_DIR/package/base-files/files/etc/apk/repositories.d"
     local apk_repos_file="$apk_repos_dir/distfeeds.list"
     local ver_file="$BUILD_DIR/include/version.mk"
+    local repo mirror_replaced=0
 
+    # 提取版本号：VERSION_NUMBER:=$(VERSION_NUMBER,5.15.150)
     local version_number
-    local raw_version
-
-    raw_version=$(sed -n 's/^VERSION_NUMBER:=.*,\([^)]*\))$/\1/p' "$ver_file" | tail -1)
-
-    if ! echo "$raw_version" | grep -q '^[0-9]'; then
-        echo "[opkg] version.mk 版本号为非数字（${raw_version}），跳过 distfeeds 生成"
-        return 0
-    fi
-
-    version_number=$(echo "$raw_version" | sed 's/^\([0-9]*\.[0-9]*\).*/\1-SNAPSHOT/')
+    version_number=$(sed -n 's/.*VERSION_NUMBER.*,\([0-9][0-9.]*\))$/\1/p' "$ver_file" | head -1)
 
     if [ -d "$emortal_def_dir" ]; then
-        # opkg 格式（src/gz 前缀）
-        cat >"$distfeeds_conf" <<EOF
-src/gz openwrt_base https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/base
-src/gz openwrt_luci https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/luci
-src/gz openwrt_packages https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/packages
-src/gz openwrt_routing https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/routing
-src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/telephony
-EOF
-
-        # APK 格式（纯 URL）
+        # 生成 opkg 和 APK 两种格式的软件源配置
         mkdir -p "$apk_repos_dir"
-        cat >"$apk_repos_file" <<EOF
-https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/base
-https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/luci
-https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/packages
-https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/routing
-https://downloads.immortalwrt.org/releases/${version_number}/packages/aarch64_cortex-a53/telephony
-EOF
+        : > "$distfeeds_conf"
+        : > "$apk_repos_file"
+        for repo in base luci packages routing telephony; do
+            local url="https://mirrors.ustc.edu.cn/immortalwrt/releases/${version_number}/packages/x86_64/${repo}"
+            echo "src/gz openwrt_${repo} ${url}" >> "$distfeeds_conf"
+            echo "$url" >> "$apk_repos_file"
+        done
 
         if ! grep -q '99-distfeeds.conf' "$emortal_def_dir/Makefile" 2>/dev/null; then
             sed -i "/define Package\/default-settings\/install/a\\
 \t\$(INSTALL_DIR) \$(1)/etc\\
-\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" $emortal_def_dir/Makefile
+\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" "$emortal_def_dir/Makefile"
 
             sed -i "/exit 0/i\\
 [ -f '/etc/99-distfeeds.conf' ] && mv '/etc/99-distfeeds.conf' '/etc/opkg/distfeeds.conf'\\
 sed -i '/^option check_signature/d' /etc/opkg.conf\\
-echo 'option check_signature 0' >> /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
+echo 'option check_signature 0' >> /etc/opkg.conf\n" "$emortal_def_dir/files/99-default-settings"
         fi
 
-        echo "[opkg] distfeeds 已生成：${version_number} (arch: aarch64_cortex-a53)"
+        echo "[opkg] 99-distfeeds.conf 已生成：${version_number}"
         echo "[apk]  distfeeds.list 已生成：${version_number}"
     fi
 
-    local chn_settings="$emortal_def_dir/files/99-default-settings-chinese"
-    if [ -f "$chn_settings" ]; then
-        sed -i 's|https://mirrors\.vsean\.net/openwrt|https://downloads.immortalwrt.org|g' "$chn_settings"
-        echo "[mirror] 99-default-settings-chinese 镜像已改为官方"
+    if [ -n "$version_number" ]; then
+        # 替换源码中所有硬编码的版本号和镜像地址
+        while IFS= read -r -d '' f; do
+            sed -i 's|$(call qstrip,$(CONFIG_VERSION_NUMBER))|'"${version_number}"'|g' "$f"
+            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
+            mirror_replaced=1
+        done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
+            -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
+            -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
+
+        if [ "$mirror_replaced" = "1" ]; then
+            echo "[mirror] 版本号和镜像源已替换为官方源：${version_number}"
+        fi
     fi
 }
 
@@ -290,14 +151,6 @@ set_build_signature() {
     [ -f "$target" ] || return 0
     if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
         patch -p1 -d "$dir" -i "$patch_file" && echo "[build] signature: build by Alex"
-    fi
-}
-
-update_nss_diag() {
-    local file="$BUILD_DIR/package/kernel/mac80211/files/nss_diag.sh"
-    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
-        \rm -f "$file"
-        install -Dm755 "$BASE_PATH/patches/nss_diag.sh" "$file"
     fi
 }
 
@@ -327,118 +180,44 @@ update_dnsmasq_conf() {
     fi
 }
 
-update_script_priority() {
-    local qca_drv_path="$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
-    if [ -d "${qca_drv_path%/*}" ] && [ -f "$qca_drv_path" ]; then
-        sed -i 's/START=.*/START=88/g' "$qca_drv_path"
-    fi
-
-    local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/qca-nss-pbuf.init"
-    if [ -d "${pbuf_path%/*}" ] && [ -f "$pbuf_path" ]; then
-        sed -i 's/START=.*/START=89/g' "$pbuf_path"
-    fi
-
-    local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
-    if [ -d "${mosdns_path%/*}" ] && [ -f "$mosdns_path" ]; then
-        sed -i 's/START=.*/START=94/g' "$mosdns_path"
-    fi
-}
-
-update_mosdns_deconfig() {
-    local mosdns_conf="$(get_custom_feed_worktree_dir)/luci-app-mosdns/root/etc/config/mosdns"
-    if [ -d "${mosdns_conf%/*}" ] && [ -f "$mosdns_conf" ]; then
-        sed -i 's/8000/300/g' "$mosdns_conf"
-        sed -i 's/5335/5336/g' "$mosdns_conf"
-    fi
-}
-
 fix_quickstart() {
-    local file_path="$(get_custom_feed_worktree_dir)/luci-app-quickstart/luasrc/controller/istore_backend.lua"
-    local url="https://gist.githubusercontent.com/puteulanus/1c180fae6bccd25e57eb6d30b7aa28aa/raw/istore_backend.lua"
-    if [ -f "$file_path" ]; then
-        echo "正在修复 quickstart..."
-        if ! curl -fsSL -o "$file_path" "$url"; then
-            echo "错误：从 $url 下载 istore_backend.lua 失败" >&2
-            return 1
-        fi
+    local cf_dir patch_file
+    cf_dir="$(get_custom_feed_source_dir)/luci-app-quickstart"
+    patch_file="$BASE_PATH/patches/010-quickstart-istore-backend-cpu-temp.patch"
+    local target="$cf_dir/luasrc/controller/istore_backend.lua"
+
+    [ -f "$target" ] || {
+        echo "[quickstart] istore_backend.lua 未找到，跳过"
+        return 0
+    }
+
+    if patch --dry-run -p1 -d "$cf_dir" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$cf_dir" -i "$patch_file" && \
+            echo "[quickstart] CPU 温度补丁已应用" || \
+            echo "[quickstart] 警告：补丁应用失败" >&2
+    else
+        echo "[quickstart] CPU 温度补丁已存在，跳过"
     fi
 }
 
 update_oaf_deconfig() {
-    local appfilter_confs
-    appfilter_confs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/open-app-filter/files/appfilter.config' 2>/dev/null)
-    local uci_defs
-    uci_defs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null)
-    # local disable_dirs
-    # disable_dirs=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -path '*/luci-app-oaf/root/etc/uci-defaults' 2>/dev/null)
+    local dir patch_file
 
-    # 修改 appfilter.config
-    if [ -n "$appfilter_confs" ]; then
-        while IFS= read -r appfilter_conf; do
-            [ -n "$appfilter_conf" ] && [ -f "$appfilter_conf" ] || continue
-            sed -i -e "s/record_enable '1'/record_enable '0'/g" \
-                   -e "s/auto_load_engine '[01]'/auto_load_engine '0'/g" "$appfilter_conf"
-            echo "[OAF] auto_load_engine=0, record_enable=0 — $appfilter_conf"
-        done <<< "$appfilter_confs"
-    fi
-
-    # 修改 94_feature_3.0，删除 disable_hnat 和 auto_load_engine，防止首次启动覆盖配置
-    if [ -n "$uci_defs" ]; then
-        while IFS= read -r uci_def; do
-            [ -n "$uci_def" ] && [ -f "$uci_def" ] || continue
-            if grep -q 'disable_hnat\|auto_load_engine' "$uci_def" 2>/dev/null; then
-                sed -i '/\(disable_hnat\|auto_load_engine\)/d' "$uci_def"
-                echo "[OAF] uci_def: removed disable_hnat + auto_load_engine — $uci_def"
-            else
-                echo "[OAF] uci_def: already clean — $uci_def"
-            fi
-        done <<< "$uci_defs"
-    fi
-}
-
-update_geoip() {
-    local geodata_path="$(get_custom_feed_package_dir)/v2ray-geodata/Makefile"
-    if [ -d "${geodata_path%/*}" ] && [ -f "$geodata_path" ]; then
-        local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' $geodata_path | grep -oE "[0-9]{1,}")
-        if [ -n "$GEOIP_VER" ]; then
-            local base_url="https://github.com/v2fly/geoip/releases/download/${GEOIP_VER}"
-            local old_SHA256
-            if ! old_SHA256=$(wget -qO- "$base_url/geoip.dat.sha256sum" | awk '{print $1}'); then
-                echo "错误：从 $base_url/geoip.dat.sha256sum 获取旧的 geoip.dat 校验和失败" >&2
-                return 1
-            fi
-            local new_SHA256
-            if ! new_SHA256=$(wget -qO- "$base_url/geoip-only-cn-private.dat.sha256sum" | awk '{print $1}'); then
-                echo "错误：从 $base_url/geoip-only-cn-private.dat.sha256sum 获取新的 geoip-only-cn-private.dat 校验和失败" >&2
-                return 1
-            fi
-            if [ -n "$old_SHA256" ] && [ -n "$new_SHA256" ]; then
-                if grep -q "$old_SHA256" "$geodata_path"; then
-                    sed -i "s|=geoip.dat|=geoip-only-cn-private.dat|g" "$geodata_path"
-                    sed -i "s/$old_SHA256/$new_SHA256/g" "$geodata_path"
-                fi
-            fi
+    # appfilter.config: record_enable 1→0
+    dir="$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type d -name 'open-app-filter' 2>/dev/null | head -1)"
+    patch_file="$BASE_PATH/patches/020-oaf-appfilter-config.patch"
+    if [ -n "$dir" ] && [ -f "$dir/files/appfilter.config" ]; then
+        if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
+            patch -p1 -d "$dir" -i "$patch_file" && echo "[OAF] appfilter: record_enable=0"
         fi
     fi
-}
 
-fix_rust_compile_error() {
-    if [ -f "$BUILD_DIR/feeds/packages/lang/rust/Makefile" ]; then
-        sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$BUILD_DIR/feeds/packages/lang/rust/Makefile"
-    fi
-}
-
-fix_easytier_lua() {
-    local file_path="$(get_custom_feed_package_dir)/luci-app-easytier/luasrc/model/cbi/easytier.lua"
-    if [ -f "$file_path" ]; then
-        sed -i 's/util.pcdata/xml.pcdata/g' "$file_path"
-    fi
-}
-
-fix_easytier_mk() {
-    local mk_path="$(get_custom_feed_worktree_dir)/luci-app-easytier/easytier/Makefile"
-    if [ -f "$mk_path" ]; then
-        sed -i 's/!@(mips||mipsel)/!TARGET_mips \&\& !TARGET_mipsel/g' "$mk_path"
+    # uci-defaults: 上游已无 disable_hnat，无需修补
+    local uci_def
+    uci_def=$(find "$(get_custom_feed_source_dir)" "$BUILD_DIR/feeds/" -maxdepth 8 -type f -path '*/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0' 2>/dev/null | head -1)
+    if [ -n "$uci_def" ] && grep -q 'disable_hnat' "$uci_def" 2>/dev/null; then
+        sed -i '/disable_hnat/d' "$uci_def"
+        echo "[OAF] uci_def: removed disable_hnat"
     fi
 }
 
@@ -483,30 +262,6 @@ fix_dockerman_rpc_events_timeout() {
     patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/997-dockerman-rpc-events-timeout.patch" && \
         echo "[dockerman-rpc] events timeout patched" || \
         echo "[dockerman-rpc] events timeout patch failed"
-}
-
-update_nginx_ubus_module() {
-    local makefile_path="$BUILD_DIR/feeds/packages/net/nginx/Makefile"
-    local source_date="2024-03-02"
-    local source_version="564fa3e9c2b04ea298ea659b793480415da26415"
-    local mirror_hash="92c9ab94d88a2fe8d7d1e8a15d15cfc4d529fdc357ed96d22b65d5da3dd24d7f"
-
-    if [ -f "$makefile_path" ]; then
-        sed -i "s/SOURCE_DATE:=2020-09-06/SOURCE_DATE:=$source_date/g" "$makefile_path"
-        sed -i "s/SOURCE_VERSION:=b2d7260dcb428b2fb65540edb28d7538602b4a26/SOURCE_VERSION:=$source_version/g" "$makefile_path"
-        sed -i "s/MIRROR_HASH:=515bb9d355ad80916f594046a45c190a68fb6554d6795a54ca15cab8bdd12fda/MIRROR_HASH:=$mirror_hash/g" "$makefile_path"
-        echo "已更新 nginx-mod-ubus 模块的 SOURCE_DATE, SOURCE_VERSION 和 MIRROR_HASH。"
-    else
-        echo "错误：未找到 $makefile_path 文件，无法更新 nginx-mod-ubus 模块。" >&2
-    fi
-}
-
-fix_opkg_check() {
-    local patch_file="$BASE_PATH/patches/001-fix-provides-version-parsing.patch"
-    local opkg_dir="$BUILD_DIR/package/system/opkg"
-    if [ -f "$patch_file" ]; then
-        install -Dm644 "$patch_file" "$opkg_dir/patches/001-fix-provides-version-parsing.patch"
-    fi
 }
 
 install_pbr_isp() {
@@ -622,16 +377,12 @@ EOF
     fi
 }
 
-update_uwsgi_limit_as() {
-    local cgi_io_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-cgi_io.ini"
-    local webui_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-webui.ini"
-
-    if [ -f "$cgi_io_ini" ]; then
-        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$cgi_io_ini"
-    fi
-
-    if [ -f "$webui_ini" ]; then
-        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$webui_ini"
+remove_tweaked_packages() {
+    local target_mk="$BUILD_DIR/include/target.mk"
+    if [ -f "$target_mk" ]; then
+        if grep -q "^DEFAULT_PACKAGES += \$(DEFAULT_PACKAGES.tweak)" "$target_mk"; then
+            sed -i 's/DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/# DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/g' "$target_mk"
+        fi
     fi
 }
 
@@ -701,5 +452,27 @@ fix_nikki_gobinpackage() {
     else
         echo "[nikki] 错误：补丁无法应用" >&2
         return 1
+    fi
+}
+
+fix_apk_package_versions() {
+    local custom_feed_dir luci_lib_docker_makefile patch_file
+
+    # update.sh 执行期间 ${BUILD_DIR}/.config 尚未生成，改用 deconfig 源文件
+    grep -q '^CONFIG_USE_APK=y' "$CONFIG_FILE" 2>/dev/null || return 0
+
+    echo "检测到 APK 包管理器，修复不兼容的版本号格式..."
+
+    custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
+    luci_lib_docker_makefile="$custom_feed_dir/luci-lib-docker/Makefile"
+    patch_file="$BASE_PATH/patches/021-luci-lib-docker-apk-version.patch"
+
+    [ -f "$luci_lib_docker_makefile" ] && [ -f "$patch_file" ] || return 0
+
+    if patch --dry-run -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" && \
+            echo "  luci-lib-docker 版本号已修复（v0.3.4 → 0.3.4，APK 兼容）"
+    else
+        echo "  luci-lib-docker 版本号补丁无需应用，跳过"
     fi
 }
