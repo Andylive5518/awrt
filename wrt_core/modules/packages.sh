@@ -28,7 +28,8 @@ remove_unwanted_packages() {
     )
     local packages_net=(
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
-        "mosdns" "adguardhome" "ddns-go" "naiveproxy" "shadowsocks-rust"
+        "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
+        "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust"
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
         "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
