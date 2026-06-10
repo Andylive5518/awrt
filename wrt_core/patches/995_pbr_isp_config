@@ -1,0 +1,28 @@
+#!/bin/sh
+# 为 PBR 添加移动/电信/联通策略路由配置文件引用
+# pbr.user.* 文件已在固件中，此脚本在首次启动时将它们注册到 /etc/config/pbr
+
+PBR_CONF="/etc/config/pbr"
+[ -f "$PBR_CONF" ] || exit 0
+
+add_pbr_include() {
+    local isp="$1"
+    if ! grep -q "pbr.user.${isp}" "$PBR_CONF" 2>/dev/null; then
+        cat >> "$PBR_CONF" <<EOF
+
+config include
+	option path '/usr/share/pbr/pbr.user.${isp}'
+	option enabled '0'
+
+config include
+	option path '/usr/share/pbr/pbr.user.${isp}6'
+	option enabled '0'
+EOF
+    fi
+}
+
+add_pbr_include "cmcc"
+add_pbr_include "ctcc"
+add_pbr_include "cucc"
+
+exit 0
