@@ -472,24 +472,23 @@ fix_nikki_gobinpackage() {
 }
 
 fix_apk_package_versions() {
-    local custom_feed_dir
-    custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)" || return 0
+    local custom_feed_dir luci_lib_docker_makefile patch_file
 
-    if ! grep -q '^CONFIG_USE_APK=y' "${BUILD_DIR}/.config" 2>/dev/null; then
-        return 0
-    fi
+    # update.sh 执行期间 ${BUILD_DIR}/.config 尚未生成，改用 deconfig 源文件
+    grep -q '^CONFIG_USE_APK=y' "$CONFIG_FILE" 2>/dev/null || return 0
 
     echo "检测到 APK 包管理器，修复不兼容的版本号格式..."
 
-    local luci_lib_docker_makefile="$custom_feed_dir/luci-lib-docker/Makefile"
-    local patch_file="$BASE_PATH/patches/021-luci-lib-docker-apk-version.patch"
+    custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
+    luci_lib_docker_makefile="$custom_feed_dir/luci-lib-docker/Makefile"
+    patch_file="$BASE_PATH/patches/021-luci-lib-docker-apk-version.patch"
 
-    if [ -f "$luci_lib_docker_makefile" ] && [ -f "$patch_file" ]; then
-        if patch --dry-run -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" >/dev/null 2>&1; then
-            patch -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" && \
-                echo "  luci-lib-docker 版本号已修复（v0.3.4 → 0.3.4，APK 兼容）"
-        else
-            echo "  luci-lib-docker 版本号补丁无需应用，跳过"
-        fi
+    [ -f "$luci_lib_docker_makefile" ] && [ -f "$patch_file" ] || return 0
+
+    if patch --dry-run -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" >/dev/null 2>&1; then
+        patch -p1 -d "$(dirname "$luci_lib_docker_makefile")" -i "$patch_file" && \
+            echo "  luci-lib-docker 版本号已修复（v0.3.4 → 0.3.4，APK 兼容）"
+    else
+        echo "  luci-lib-docker 版本号补丁无需应用，跳过"
     fi
 }
