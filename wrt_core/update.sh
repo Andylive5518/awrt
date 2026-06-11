@@ -69,7 +69,7 @@ main() {
     update_uwsgi_limit_as
     update_nginx_ubus_module
     check_default_settings
-    install_opkg_distfeeds
+    # fix_apk_repo_mirrors
     fix_bandix_default_enabled
     fix_easytier_mk
     remove_attendedsysupgrade
@@ -89,7 +89,6 @@ main() {
     install_pbr_ctcc
     install_pbr_cucc
     enable_ttyd_autologin
-    fix_nikki_gobinpackage
     fix_pbr_ip_forward
 }
 

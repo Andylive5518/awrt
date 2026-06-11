@@ -97,7 +97,7 @@ apply_passwall_tweaks() {
     fi
 }
 
-install_opkg_distfeeds() {
+fix_apk_repo_mirrors() {
     local emortal_def_dir="$BUILD_DIR/package/emortal/default-settings"
     local distfeeds_conf="$emortal_def_dir/files/99-distfeeds.conf"
     local apk_repos_dir="$BUILD_DIR/package/base-files/files/etc/apk/repositories.d"
@@ -139,14 +139,15 @@ echo 'option check_signature 0' >> /etc/opkg.conf\n" "$emortal_def_dir/files/99-
         # 替换源码中所有硬编码的版本号和镜像地址
         while IFS= read -r -d '' f; do
             sed -i 's|$(call qstrip,$(CONFIG_VERSION_NUMBER))|'"${version_number}"'|g' "$f"
-            sed -i "s|mirrors.vsean.net/openwrt|downloads.immortalwrt.org|g" "$f"
+            sed -i "s|mirrors.vsean.net/openwrt|mirrors.ustc.edu.cn/immortalwrt|g" "$f"
+            sed -i "s|downloads.immortalwrt.org|mirrors.ustc.edu.cn/immortalwrt|g" "$f"
             mirror_replaced=1
         done < <(find "$BUILD_DIR/package" "$BUILD_DIR/include" "$BUILD_DIR/scripts" "$BUILD_DIR/feeds" \
             -type f \( -name '*.conf' -o -name '*.mk' -o -name 'Makefile' -o -name '*.sh' \) \
-            -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
+            -exec grep -l 'qstrip.*CONFIG_VERSION_NUMBER\|mirrors\.vsean\.net\|downloads\.immortalwrt\.org' {} \; 2>/dev/null | sort -u | tr '\n' '\0')
 
         if [ "$mirror_replaced" = "1" ]; then
-            echo "[mirror] 版本号和镜像源已替换为官方源：${version_number}"
+            echo "[mirror] 版本号和镜像源已替换为中科大源：${version_number}"
         fi
     fi
 }
@@ -446,21 +447,7 @@ fix_bandix_default_enabled() {
     fi
 }
 
-fix_nikki_gobinpackage() {
-    local dir="$(get_custom_feed_package_dir)/nikki"
-    local patch_file="$BASE_PATH/patches/022-nikki-build-install.patch"
-    [ -f "$dir/Makefile" ] || return 0
-    if grep -q '^define Build/Install$' "$dir/Makefile" 2>/dev/null; then
-        echo "[nikki] 修复已存在，跳过"
-        return 0
-    fi
-    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
-        patch -p1 -d "$dir" -i "$patch_file" && echo "[nikki] Build/Install 已覆盖（阻止 install_src）"
-    else
-        echo "[nikki] 错误：补丁无法应用" >&2
-        return 1
-    fi
-}
+
 
 fix_apk_package_versions() {
     local custom_feed_dir entry pkg_name makefile patch_file msg
