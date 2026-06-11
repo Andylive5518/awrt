@@ -63,7 +63,9 @@ packages:
       - luci-app-usb-printer
       - luci-app-autoreboot
       - luci-app-microsocks
+      - luci-app-tailscale-community  # 依赖 tailscale（已删除）
     net_packages:
+      - bsbf-resources        # 依赖 xray-core（已删除）
       - xray-core
       - xray-plugin
       - dns2socks
@@ -97,6 +99,8 @@ packages:
     utils:
       - cups
       - coremark
+      - hplip               # 依赖 cups（已删除）
+      - cups-bjnp           # 依赖 cups（已删除）
 
   force_enable:
     - dockerd
