@@ -64,7 +64,7 @@ main() {
     fix_rust_compile_error
     update_smartdns
     patch_smartdns
-    # update_dockerman
+    update_dockerman
     set_nginx_default_config
     update_uwsgi_limit_as
     update_nginx_ubus_module

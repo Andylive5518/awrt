@@ -23,7 +23,7 @@ remove_unwanted_packages() {
         "luci-app-haproxy-tcp" "luci-app-openclash" "luci-app-mihomo" "luci-app-appfilter"
         "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome" "luci-app-diskman"
         "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker"
-        "luci-app-dockerman" "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
+        "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
         "luci-app-autoreboot" "luci-app-microsocks"
     )
     local packages_net=(
@@ -183,7 +183,7 @@ install_custom_feed() {
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
-        luci-lib-docker luci-app-dockerman luci-app-diskman smartdns luci-app-smartdns \
+        luci-lib-docker luci-app-diskman smartdns luci-app-smartdns \
         luci-theme-argon luci-app-argon-config
     )
     local required_feed_dirs=(
@@ -251,9 +251,8 @@ verify_custom_feed_installed_paths() {
     local custom_feed_name
     local custom_feed_package_dir
     local required_package_dirs=(
-        luci-app-adguardhome luci-app-mosdns luci-app-easytier
+        luci-app-adguardhome luci-app-mosdns luci-app-easytier luci-app-homeproxy
         luci-app-passwall luci-app-nikki v2ray-core v2ray-geodata luci-app-quickfile
-        luci-app-dockerman luci-app-homeproxy
     )
     local missing_package_dirs=()
 
