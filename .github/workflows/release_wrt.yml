@@ -33,6 +33,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
 
+      - name: Install Python Dependencies
+        run: |
+          pip install -r wrt_core/requirements.txt
+
       - name: Set Build Date and Timezone
         run: |
           sudo -E timedatectl set-timezone "Asia/Shanghai"
