@@ -18,4 +18,5 @@ pip install -q -r "$SCRIPT_DIR/wrt_core/requirements.txt" 2>/dev/null || {
     echo "Warning: pip install failed, continuing anyway..."
 }
 
-exec python "$SCRIPT_DIR/wrt_core/builder/main.py" "$@"
+cd "$SCRIPT_DIR"
+exec python3 -m wrt_core.builder.main "$@"
