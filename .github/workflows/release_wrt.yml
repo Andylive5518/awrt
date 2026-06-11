@@ -156,7 +156,7 @@ jobs:
 
           cd "${OPENWRT_PATH}"
 
-          echo "[1/7] 创建 Release ..."
+          echo "[1/5] 创建 Release ..."
 
           release_id=""
           get_resp=$(curl -s -w "\n%{http_code}" \
@@ -189,53 +189,36 @@ jobs:
             echo "  Release 创建成功，ID=${release_id}"
           fi
 
-          echo "[2/5] 打包 feeds/ + custom_feed/（全量）..."
-          mkdir -p build2025
-          rsync -a "feeds/" "build2025/feeds/" 2>/dev/null || true
-          if [ -d "custom_feed" ]; then
-            rsync -a "custom_feed/" "build2025/custom_feed/" 2>/dev/null || true
-          fi
-          tar -czf "/tmp/build2025_feeds.tar.gz" -C build2025/ feeds/ custom_feed/
-          echo "  完成: $(du -h /tmp/build2025_feeds.tar.gz | cut -f1)"
+          echo "[2/5] 打包所有编译产物（全量）..."
 
-          echo "[3/5] 打包 package/（全量）..."
-          rsync -a "package/" "build2025/package/" 2>/dev/null || true
-          tar -czf "/tmp/build2025_package.tar.gz" -C build2025/ package/
-          echo "  完成: $(du -h /tmp/build2025_package.tar.gz | cut -f1)"
+          echo "  正在打包全部编译产物，请稍候..."
+          echo "  源目录: ${OPENWRT_PATH}"
+          echo "  预估大小: $(du -sh "${OPENWRT_PATH}" --exclude=.ccache --exclude=staging_dir 2>/dev/null | cut -f1)"
 
-          echo "[4/5] 打包 .config + feeds.conf.default ..."
-          CONFIG_TMP_DIR="/tmp/build2025_config"
-          rm -rf "$CONFIG_TMP_DIR"
-          mkdir -p "$CONFIG_TMP_DIR"
+          tar -czf "/tmp/build2025_full.tar.gz" \
+            --exclude=".ccache" \
+            --exclude="staging_dir" \
+            --exclude=".git" \
+            -C "${OPENWRT_PATH}" .
 
-          CONFIG_FILE=""
-          for candidate in \
-            "./.config" \
-            "${OPENWRT_PATH}/.config" \
-            "${GITHUB_WORKSPACE}/action_build/.config"; do
-            if [ -f "$candidate" ]; then
-              CONFIG_FILE="$candidate"
-              break
-            fi
-          done
+          ARCHIVE_SIZE=$(stat -c%s "/tmp/build2025_full.tar.gz" 2>/dev/null || stat -f%z "/tmp/build2025_full.tar.gz" 2>/dev/null)
+          echo "  打包完成: $(du -h /tmp/build2025_full.tar.gz | cut -f1) (${ARCHIVE_SIZE} bytes)"
 
-          if [ -z "$CONFIG_FILE" ]; then
-            CONFIG_FILE=$(find "${OPENWRT_PATH}" -maxdepth 4 -name ".config" -type f 2>/dev/null | head -1)
-          fi
+          SPLIT_DIR="/tmp/build2025_split"
+          rm -rf "$SPLIT_DIR"
+          mkdir -p "$SPLIT_DIR"
 
-          if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-            echo "  找到生成后的 .config: $CONFIG_FILE"
-            cp -f "$CONFIG_FILE" "$CONFIG_TMP_DIR/.config"
-            if [ -f "feeds.conf.default" ]; then
-              cp -f "feeds.conf.default" "$CONFIG_TMP_DIR/feeds.conf.default"
-            fi
-            tar -czf /tmp/build2025_config.tar.gz -C "$CONFIG_TMP_DIR" .
-            echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
+          if [ "${ARCHIVE_SIZE}" -gt 2147483648 ]; then
+            echo "  文件超过 2GB，分割为多个部分..."
+            split -b 1800M "/tmp/build2025_full.tar.gz" "${SPLIT_DIR}/build2025_full.tar.gz.part."
+            echo "  分割完成，共 $(ls -1 "${SPLIT_DIR}" | wc -l) 个部分"
+            FINAL_DIR="$SPLIT_DIR"
           else
-            echo "  [跳过] .config 未找到"
+            cp "/tmp/build2025_full.tar.gz" "${SPLIT_DIR}/build2025_full.tar.gz"
+            FINAL_DIR="$SPLIT_DIR"
           fi
 
-          echo "[5/5] 上传到 Release Assets ..."
+          echo "[3/5] 上传到 Release Assets ..."
 
           upload_asset() {
             local local_file="$1"
@@ -288,14 +271,13 @@ jobs:
           }
 
           echo "----------------------------------------"
-          upload_asset "/tmp/build2025_feeds.tar.gz"   "feeds.tar.gz"
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_package.tar.gz"  "package.tar.gz"
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_config.tar.gz"   ".config.tar.gz"
-          echo "----------------------------------------"
+          for part_file in "${FINAL_DIR}"/*; do
+            part_name=$(basename "$part_file")
+            upload_asset "$part_file" "$part_name"
+            echo "----------------------------------------"
+          done
 
-          rm -rf build2025 /tmp/build2025_*.tar.gz
+          rm -rf "$SPLIT_DIR" /tmp/build2025_full.tar.gz
 
           echo ""
           echo "============================================"
@@ -380,5 +362,5 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.BUILD_DATE }}_x64_immwrt
-          files: './firmware/*.*'
+          files: './firmware/*'
           body_path: ./release_body.txt
