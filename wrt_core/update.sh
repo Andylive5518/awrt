@@ -59,7 +59,7 @@ main() {
     ## add_quickfile
     ## update_dockerman
     ## set_nginx_default_config
-    install_opkg_distfeeds
+    # fix_apk_repo_mirrors
     fix_dockerman_menu_order
     fix_adguardhome_rpcd
     fix_dockerman_events_timeout
