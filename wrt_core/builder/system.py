@@ -43,6 +43,8 @@ class SystemConfigurator:
                 continue
 
             target_path = target_dir / target_name
+            if target_path.exists():
+                target_path.chmod(0o644)
             shutil.copy2(source_path, target_path)
             target_path.chmod(0o544)
             self.logger.ok(f"UCI defaults 已安装: {target_name}")
@@ -131,6 +133,8 @@ class SystemConfigurator:
             src = config_dir / f"pbr.user.{isp_lower}{suffix}"
             dst = pbr_dir / f"pbr.user.{isp_lower}{suffix}"
             if src.exists():
+                if dst.exists():
+                    dst.chmod(0o644)
                 shutil.copy2(src, dst)
                 self.logger.ok(f"PBR {isp_upper}{' IPv6' if suffix else ''} 配置已安装")
 
@@ -312,7 +316,10 @@ class SystemConfigurator:
             for name, rel_path in scripts.items():
                 src = self.base_path / rel_path
                 if src.exists():
-                    shutil.copy2(src, autocore_dir / name)
+                    dst = autocore_dir / name
+                    if dst.exists():
+                        dst.chmod(0o644)
+                    shutil.copy2(src, dst)
                     self.logger.ok(f"监控脚本已安装: {name}")
 
         return True
@@ -329,8 +336,11 @@ class SystemConfigurator:
 
         target_dir = self.build_dir / "package" / "base-files" / "files" / "etc" / "init.d"
         target_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, target_dir / "smp_affinity")
-        (target_dir / "smp_affinity").chmod(0o755)
+        dst = target_dir / "smp_affinity"
+        if dst.exists():
+            dst.chmod(0o644)
+        shutil.copy2(src, dst)
+        dst.chmod(0o755)
         self.logger.ok("SMP affinity 配置已安装")
         return True
 
