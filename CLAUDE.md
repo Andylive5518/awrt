@@ -59,7 +59,7 @@ The build pipeline runs 12 declarative steps (configurable in `build.yaml`):
 
 ## Key Details
 
-- **Branch**: `x86-25.10` (active development), `main` is default
+- **Branch**: `x86_25` (active development), `main` is default
 - **Target**: x86/64 (x86_64)
 - **Upstream**: ImmortalWrt (URL and branch in `compilecfg/x64_immwrt.ini`)
 - **Package manager**: APK (not opkg). Version compatibility fixes in `build.yaml`

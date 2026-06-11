@@ -1,0 +1,10 @@
+[21:37:52] [INFO] 构建工具启动
+[21:37:52] [INFO] wrt_core 路径: /home/alex/new/awrt/x86/wrt_core
+[21:37:52] [INFO] 配置文件: /home/alex/new/awrt/x86/wrt_core/build.yaml
+[21:37:52] [INFO] 日志文件: /home/alex/new/awrt/x86/build.log
+
+============================================================
+[21:37:52] [STEP 1/1] 加载配置
+============================================================
+[21:37:52] [INFO] [32m[OK][0m    配置加载完成: https://github.com/immortalwrt/immortalwrt.git (v25.12.0)
+[21:37:52] [INFO] Debug 模式：配置加载完成，退出
