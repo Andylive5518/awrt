@@ -5,7 +5,7 @@
 用户只需编辑 `build.yaml` 即可完成所有新增、修改、删除操作。
 
 ## 当前阶段
-Phase 1
+Phase 3
 
 ## 各阶段
 
@@ -16,20 +16,26 @@ Phase 1
 - [x] Task 4: 创建完整的 build.yaml
 - [x] Task 5: 所有模块 stub 文件 + main.py CLI 入口
 - [x] Task 6: 更新 build.sh 为兼容层
-- [ ] Task 7: 验证 Python 工具可运行
-- **状态：** in_progress
+- [x] Task 7: 验证 Python 工具可运行
+- **状态：** complete
 
 ### Phase 2：核心模块（替换 packages.sh / feeds.sh / patcher 手动调用）
-- [ ] Task 8: 实现 patcher.py（patch 自动应用 + dry-run + upgrade-check）
-- [ ] Task 9: 实现 packages.py（包移除 + tweak + APK 修复）
-- [ ] Task 10: 实现 feeds.py（自定义 feed 稀疏克隆 + 外部仓库）
-- **状态：** pending
+- [x] Task 8: 实现 patcher.py（patch 自动应用 + dry-run + upgrade-check）
+- [x] Task 9: 实现 packages.py（包移除 + tweak + APK 修复）
+- [x] Task 10: 实现 feeds.py（自定义 feed 稀疏克隆 + 外部仓库）
+- **状态：** complete
 
 ### Phase 3：复杂模块（替换 docker.sh / system.sh）
-- [ ] Task 11: 实现 docker.py（nftables 兼容 + 1009 行 docker.sh 替换）
-- [ ] Task 12: 实现 system.py（UCI defaults + PBR + ttyd 等）
-- [ ] Task 13: 实现 image.py（make + 产物打包）
-- **状态：** pending
+- [x] Task 11: 实现 docker.py（nftables 兼容 + 1009 行 docker.sh 替换）
+- [x] Task 12: 实现 system.py（UCI defaults + PBR + ttyd 等）
+- [x] Task 13: 实现 image.py（make + 产物打包）
+- **状态：** complete
+
+### Phase 4：收尾
+- [x] Task 14: 更新 GitHub Actions workflow
+- [x] Task 15: 删除旧 Shell 模块
+- [x] Task 16: 更新 CLAUDE.md
+- **状态：** complete
 
 ### Phase 4：收尾
 - [ ] Task 14: 更新 GitHub Actions workflow

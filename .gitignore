@@ -3,5 +3,8 @@
 .claude/
 .omc/
 *.md
+progress.md
+task_plan.md
 CLAUDE.md
 .reasonix/
+docs/
