@@ -1,5 +1,11 @@
-"""系统配置。"""
+"""系统配置。
 
+UCI defaults、LAN 地址、ttyd、PBR ISP 路由、构建签名、菜单位置等。
+"""
+
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 from .config import BuildConfig
@@ -15,8 +21,386 @@ class SystemConfigurator:
         self.build_dir = build_dir
         self.logger = logger
 
+    # ---- UCI Defaults ----
+
+    def _install_uci_defaults(self) -> bool:
+        """安装 UCI defaults 文件到 base-files。"""
+        uci_cfg = self.config.uci_defaults
+        if not uci_cfg.files:
+            self.logger.skip("没有配置 UCI defaults 文件")
+            return True
+
+        target_dir = self.build_dir / "package" / "base-files" / "files" / "etc" / "uci-defaults"
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for entry in uci_cfg.files:
+            source = entry.get("source", "")
+            target_name = entry.get("target", "")
+
+            source_path = self.base_path / source
+            if not source_path.exists():
+                self.logger.warn(f"UCI defaults 源文件不存在: {source_path}")
+                continue
+
+            target_path = target_dir / target_name
+            shutil.copy2(source_path, target_path)
+            target_path.chmod(0o544)
+            self.logger.ok(f"UCI defaults 已安装: {target_name}")
+
+        return True
+
+    def _fix_default_theme(self) -> bool:
+        """替换默认主题为 argon。"""
+        theme = self.config.uci_defaults.theme
+        collections_dir = self.build_dir / "feeds" / "luci" / "collections"
+        if not collections_dir.exists():
+            self.logger.skip("luci collections 目录不存在")
+            return True
+
+        for makefile in collections_dir.rglob("Makefile"):
+            content = makefile.read_text()
+            if "luci-theme-bootstrap" in content:
+                content = content.replace("luci-theme-bootstrap", f"luci-theme-{theme}")
+                makefile.write_text(content)
+                self.logger.ok(f"默认主题已替换为 {theme}")
+
+        return True
+
+    def _update_lan_addr(self) -> bool:
+        """修改默认 LAN IP 地址。"""
+        lan_addr = self.config.uci_defaults.lan_addr
+        config_generate = self.build_dir / "package" / "base-files" / "files" / "bin" / "config_generate"
+        if not config_generate.exists():
+            self.logger.skip("config_generate 不存在")
+            return True
+
+        content = config_generate.read_text()
+        # 替换所有 192.168.x.x 为配置的地址
+        import re
+        content = re.sub(r'192\.168\.[0-9]+\.[0-9]+', lan_addr, content)
+        config_generate.write_text(content)
+        self.logger.ok(f"默认 LAN 地址已更新为 {lan_addr}")
+        return True
+
+    def _set_build_signature(self) -> bool:
+        """在 LuCI 状态页添加构建签名。"""
+        target = self.build_dir / "feeds" / "luci" / "modules" / "luci-mod-status" / "htdocs" / "luci-static" / "resources" / "view" / "status" / "include" / "10_system.js"
+        patch_file = self.base_path / "patches" / "013-build-signature.patch"
+
+        if not target.exists():
+            self.logger.skip("10_system.js 不存在")
+            return True
+        if not patch_file.exists():
+            self.logger.skip("build-signature patch 不存在")
+            return True
+
+        # dry-run
+        result = subprocess.run(
+            ["patch", "--dry-run", "-p1", "-d", str(target.parent), "-i", str(patch_file)],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode != 0:
+            self.logger.skip("构建签名 patch 已存在或无法应用")
+            return True
+
+        subprocess.run(
+            ["patch", "-p1", "-d", str(target.parent), "-i", str(patch_file)],
+            capture_output=True, check=False,
+        )
+        self.logger.ok("构建签名已设置")
+        return True
+
+    # ---- PBR ISP 路由 ----
+
+    def _install_pbr_isp(self, isp_lower: str, isp_upper: str) -> bool:
+        """安装 PBR ISP 配置文件。"""
+        pbr_pkg_dir = self.build_dir / "package" / "feeds" / "packages" / "pbr"
+        if not pbr_pkg_dir.exists():
+            pbr_pkg_dir = self.build_dir / "feeds" / "packages" / "net" / "pbr"
+        if not pbr_pkg_dir.exists():
+            self.logger.warn(f"PBR 包目录不存在")
+            return False
+
+        pbr_dir = pbr_pkg_dir / "files" / "usr" / "share" / "pbr"
+        pbr_dir.mkdir(parents=True, exist_ok=True)
+
+        config_dir = self.base_path / self.config.pbr.config_dir
+
+        # 复制 IPv4 和 IPv6 配置
+        for suffix in ("", "6"):
+            src = config_dir / f"pbr.user.{isp_lower}{suffix}"
+            dst = pbr_dir / f"pbr.user.{isp_lower}{suffix}"
+            if src.exists():
+                shutil.copy2(src, dst)
+                self.logger.ok(f"PBR {isp_upper}{' IPv6' if suffix else ''} 配置已安装")
+
+        # 修改 Makefile 添加安装规则
+        makefile = pbr_pkg_dir / "Makefile"
+        if makefile.exists():
+            content = makefile.read_text()
+            if f"pbr.user.{isp_lower}" not in content:
+                # 在 Package/pbr/install 段添加
+                new_rules = f'\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.{isp_lower} $(1)/usr/share/pbr/pbr.user.{isp_lower}\n'
+                new_rules += f'\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.{isp_lower}6 $(1)/usr/share/pbr/pbr.user.{isp_lower}6\n'
+                if "define Package/pbr/install" in content:
+                    content = content.replace(
+                        "define Package/pbr/install",
+                        "define Package/pbr/install" + new_rules,
+                    )
+                    makefile.write_text(content)
+                    self.logger.ok(f"PBR Makefile 已添加 {isp_upper} 安装规则")
+
+        return True
+
+    def _fix_pbr_ip_forward(self) -> bool:
+        """修复 PBR IP 转发检查。"""
+        # 查找 PBR init 脚本
+        candidates = [
+            self.build_dir / "feeds" / "packages" / "net" / "pbr" / "files" / "etc" / "init.d" / "pbr",
+            self.build_dir / "package" / "feeds" / "packages" / "pbr" / "files" / "etc" / "init.d" / "pbr",
+        ]
+        init_script = None
+        for c in candidates:
+            if c.exists():
+                init_script = c
+                break
+
+        if not init_script:
+            self.logger.skip("PBR init 脚本未找到")
+            return True
+
+        patch_file = self.base_path / "patches" / "019-pbr-ip-forward.patch"
+        if not patch_file.exists():
+            self.logger.skip("PBR ip-forward patch 不存在")
+            return True
+
+        # 检查是否已修复
+        content = init_script.read_text()
+        if '-n "$strict_enforcement" ] && [ -n "$enabled" ]' in content:
+            self.logger.skip("PBR IP Forward 已修复")
+            return True
+
+        result = subprocess.run(
+            ["patch", "--dry-run", "-p1", "-d", str(init_script.parent), "-i", str(patch_file)],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode == 0:
+            subprocess.run(
+                ["patch", "-p1", "-d", str(init_script.parent), "-i", str(patch_file)],
+                capture_output=True, check=False,
+            )
+            self.logger.ok("PBR IP Forward 已修复")
+        else:
+            self.logger.skip("PBR IP Forward patch 无法应用")
+
+        return True
+
+    # ---- 其他系统配置 ----
+
+    def _change_dnsmasq2full(self) -> bool:
+        """替换 dnsmasq 为 dnsmasq-full。"""
+        target_mk = self.build_dir / "include" / "target.mk"
+        if not target_mk.exists():
+            return True
+
+        content = target_mk.read_text()
+        if "dnsmasq-full" not in content:
+            content = content.replace("dnsmasq", "dnsmasq-full")
+            target_mk.write_text(content)
+            self.logger.ok("dnsmasq 已替换为 dnsmasq-full")
+        return True
+
+    def _enable_ttyd_autologin(self) -> bool:
+        """启用 TTYD 自动登录。"""
+        candidates = [
+            self.build_dir / "feeds" / "packages" / "utils" / "ttyd" / "files" / "ttyd.config",
+            self.build_dir / "package" / "feeds" / "packages" / "ttyd" / "files" / "ttyd.config",
+        ]
+        ttyd_config = None
+        for c in candidates:
+            if c.exists():
+                ttyd_config = c
+                break
+
+        if not ttyd_config:
+            self.logger.skip("ttyd.config 未找到")
+            return True
+
+        patch_file = self.base_path / "patches" / "014-ttyd-autologin.patch"
+        if not patch_file.exists():
+            self.logger.skip("ttyd autologin patch 不存在")
+            return True
+
+        result = subprocess.run(
+            ["patch", "--dry-run", "-p1", "-d", str(ttyd_config.parent), "-i", str(patch_file)],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode == 0:
+            subprocess.run(
+                ["patch", "-p1", "-d", str(ttyd_config.parent), "-i", str(patch_file)],
+                capture_output=True, check=False,
+            )
+            self.logger.ok("TTYD 自动登录已启用")
+        else:
+            self.logger.skip("TTYD autologin patch 已存在或无法应用")
+
+        return True
+
+    def _update_menu_locations(self) -> bool:
+        """调整菜单位置（samba4, bandix）。"""
+        # samba4 菜单
+        samba4_dir = self.build_dir / "feeds" / "luci" / "applications" / "luci-app-samba4"
+        if samba4_dir.exists():
+            patch_file = self.base_path / "patches" / "015-menu-samba4.patch"
+            if patch_file.exists():
+                result = subprocess.run(
+                    ["patch", "--dry-run", "-p1", "-d", str(samba4_dir), "-i", str(patch_file)],
+                    capture_output=True, check=False,
+                )
+                if result.returncode == 0:
+                    subprocess.run(
+                        ["patch", "-p1", "-d", str(samba4_dir), "-i", str(patch_file)],
+                        capture_output=True, check=False,
+                    )
+                    self.logger.ok("samba4 菜单位置已调整")
+
+        # bandix 菜单
+        bandix_dir = self.build_dir / "package" / "feeds" / "custom_feed" / "luci-app-bandix"
+        if not bandix_dir.exists():
+            bandix_dir = self.build_dir / "custom_feed" / "luci-app-bandix"
+        if bandix_dir.exists():
+            patch_file = self.base_path / "patches" / "016-menu-bandix.patch"
+            if patch_file.exists():
+                result = subprocess.run(
+                    ["patch", "--dry-run", "-p1", "-d", str(bandix_dir), "-i", str(patch_file)],
+                    capture_output=True, check=False,
+                )
+                if result.returncode == 0:
+                    subprocess.run(
+                        ["patch", "-p1", "-d", str(bandix_dir), "-i", str(patch_file)],
+                        capture_output=True, check=False,
+                    )
+                    self.logger.ok("bandix 菜单位置已调整")
+
+        return True
+
+    def _fix_kconfig_recursive(self) -> bool:
+        """修复 Kconfig 递归依赖生成逻辑。"""
+        filepath = self.build_dir / "scripts" / "package-metadata.pl"
+        if not filepath.exists():
+            return True
+
+        content = filepath.read_text()
+        if "!=y" not in content:
+            content = content.replace(
+                "<PACKAGE_$pkgname",
+                "!=y",
+            )
+            filepath.write_text(content)
+            self.logger.ok("Kconfig 递归依赖已修复")
+        return True
+
+    def _install_monitoring_scripts(self) -> bool:
+        """安装系统监控脚本。"""
+        scripts = self.config.system.monitoring_scripts
+        if not scripts:
+            return True
+
+        # cpuusage, tempinfo 等复制到 autocore
+        autocore_dir = self.build_dir / "package" / "emortal" / "autocore" / "files"
+        if autocore_dir.exists():
+            for name, rel_path in scripts.items():
+                src = self.base_path / rel_path
+                if src.exists():
+                    shutil.copy2(src, autocore_dir / name)
+                    self.logger.ok(f"监控脚本已安装: {name}")
+
+        return True
+
+    def _install_smp_affinity(self) -> bool:
+        """安装 SMP affinity 配置。"""
+        smp_path = self.config.system.smp_affinity
+        if not smp_path:
+            return True
+
+        src = self.base_path / smp_path
+        if not src.exists():
+            return True
+
+        target_dir = self.build_dir / "package" / "base-files" / "files" / "etc" / "init.d"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, target_dir / "smp_affinity")
+        (target_dir / "smp_affinity").chmod(0o755)
+        self.logger.ok("SMP affinity 配置已安装")
+        return True
+
+    def _set_custom_cron(self) -> bool:
+        """安装自定义 cron 任务 init 脚本。"""
+        cron_tasks = self.config.system.cron_tasks
+        if not cron_tasks:
+            return True
+
+        sh_dir = self.build_dir / "package" / "base-files" / "files" / "etc" / "init.d"
+        sh_dir.mkdir(parents=True, exist_ok=True)
+
+        script_content = """#!/bin/sh /etc/rc.common
+START=99
+
+boot() {
+    sed -i '/drop_caches/d' /etc/crontabs/root
+"""
+        for task in cron_tasks:
+            script_content += f'    echo "{task.get("schedule", "")} {task.get("command", "")}" >>/etc/crontabs/root\n'
+
+        script_content += """    crontab /etc/crontabs/root
+}
+"""
+        script_path = sh_dir / "custom_task"
+        script_path.write_text(script_content)
+        script_path.chmod(0o755)
+        self.logger.ok("自定义 cron 任务已安装")
+        return True
+
+    def _remove_attendedsysupgrade(self) -> bool:
+        """从 luci collections 中移除 attendedsysupgrade。"""
+        collections_dir = self.build_dir / "feeds" / "luci" / "collections"
+        if not collections_dir.exists():
+            return True
+
+        for makefile in collections_dir.rglob("Makefile"):
+            content = makefile.read_text()
+            if "luci-app-attendedsysupgrade" in content:
+                content = content.replace("luci-app-attendedsysupgrade", "")
+                lines = [l for l in content.split("\n") if l.strip()]
+                makefile.write_text("\n".join(lines) + "\n")
+                self.logger.ok(f"已从 {makefile.name} 移除 attendedsysupgrade")
+
+        return True
+
+    # ---- 主入口 ----
+
     def configure(self) -> bool:
         """执行所有系统配置。"""
-        # TODO: Phase 3 实现
-        self.logger.skip("系统配置（Phase 3 实现）")
+        self.logger.info("开始系统配置...")
+
+        self._install_uci_defaults()
+        self._fix_default_theme()
+        self._update_lan_addr()
+        self._change_dnsmasq2full()
+        self._set_build_signature()
+        self._enable_ttyd_autologin()
+        self._update_menu_locations()
+        self._fix_kconfig_recursive()
+        self._install_monitoring_scripts()
+        self._install_smp_affinity()
+        self._set_custom_cron()
+        self._remove_attendedsysupgrade()
+
+        # PBR ISP 配置
+        for isp in self.config.pbr.isps:
+            isp_upper = isp.upper()
+            self._install_pbr_isp(isp, isp_upper)
+        self._fix_pbr_ip_forward()
+
+        self.logger.done("系统配置完成")
         return True
