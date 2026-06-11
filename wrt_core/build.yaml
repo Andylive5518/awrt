@@ -1,0 +1,355 @@
+# ============================================
+# ImmortalWrt x86_64 固件构建配置
+# 这是唯一需要手动编辑的配置文件
+# ============================================
+
+# 上游仓库配置
+source:
+  repo: https://github.com/immortalwrt/immortalwrt.git
+  branch: v25.12.0
+  build_dir: immortalwrt
+
+# 构建目标
+target:
+  arch: x86_64
+  device: generic
+  rootfs_size: 3072
+  images:
+    - vmdk
+    - qcow2
+    - efi.img.gz
+
+# 内核配置片段
+kernel_config:
+  base: deconfig/x64_immwrt.config
+  fragments:
+    - deconfig/proxy.config
+    - deconfig/app.config
+    - deconfig/docker_deps.config
+
+# 包管理器
+package_manager:
+  type: apk
+  repo: https://mirrors.ustc.edu.cn/immortalwrt/releases/25.12.0
+
+# 包管理
+packages:
+  remove:
+    luci_apps:
+      - luci-app-passwall
+      - luci-app-ddns-go
+      - luci-app-rclone
+      - luci-app-ssr-plus
+      - luci-app-vssr
+      - luci-app-daed
+      - luci-app-dae
+      - luci-app-alist
+      - luci-app-homeproxy
+      - luci-app-haproxy-tcp
+      - luci-app-openclash
+      - luci-app-mihomo
+      - luci-app-appfilter
+      - luci-app-msd_lite
+      - luci-app-unblockneteasemusic
+      - luci-app-adguardhome
+      - luci-app-diskman
+      - luci-app-argon-config
+      - luci-theme-argon
+      - luci-app-cpufreq
+      - luci-app-docker
+      - luci-app-dockerman
+      - luci-app-wechatpush
+      - luci-app-zerotier
+      - luci-app-usb-printer
+      - luci-app-autoreboot
+      - luci-app-microsocks
+    net_packages:
+      - xray-core
+      - xray-plugin
+      - dns2socks
+      - alist
+      - hysteria
+      - v2raya
+      - mosdns
+      - ddns-go
+      - naiveproxy
+      - shadowsocks-rust
+      - sing-box
+      - v2ray-core
+      - v2ray-geodata
+      - v2ray-plugin
+      - chinadns-ng
+      - ipt2socks
+      - tcping
+      - simple-obfs
+      - shadowsocksr-libev
+      - dae
+      - daed
+      - mihomo
+      - geoview
+      - tailscale
+      - open-app-filter
+      - msd_lite
+      - cdnspeedtest
+      - microsocks
+      - tuic-server
+      - shadow-tls
+    utils:
+      - cups
+      - coremark
+
+  force_enable:
+    - dockerd
+    - kmod-overlayfs
+
+  apk_fixes:
+    luci-lib-docker: 021-luci-lib-docker-apk-version.patch
+    luci-app-store: 022-luci-app-store-apk-version.patch
+
+  apk_file_conflicts:
+    - package: luci-app-adguardhome
+      remove_files:
+        - root/etc/init.d/adguardhome
+
+# 自定义 Feed 源
+feeds:
+  sources:
+    - label: kiddin9/op-packages
+      url: https://github.com/kiddin9/op-packages.git
+      branch: ""
+      packages:
+        - xray-core
+        - xray-plugin
+        - dns2tcp
+        - dns2socks
+        - hysteria
+        - microsocks
+        - naiveproxy
+        - shadowsocks-rust
+        - sing-box
+        - geoview
+        - v2ray-plugin
+        - chinadns-ng
+        - ipt2socks
+        - tcping
+        - simple-obfs
+        - shadowsocksr-libev
+        - v2dat
+        - luci-app-adguardhome
+        - ddns-go
+        - luci-app-iperf3-server
+        - luci-app-ddns-go
+        - taskd
+        - luci-lib-xterm
+        - luci-lib-taskd
+        - luci-app-store
+        - quickstart
+        - luci-app-quickstart
+        - luci-app-istorex
+        - netdata
+        - luci-app-netdata
+        - lucky
+        - luci-app-lucky
+        - luci-app-openclash
+        - luci-app-homeproxy
+        - luci-app-amlogic
+        - oaf
+        - open-app-filter
+        - luci-app-oaf
+        - easytier
+        - luci-app-easytier
+        - msd_lite
+        - luci-app-msd_lite
+        - cups
+        - luci-app-cupsd
+        - mihomo
+        - luci-app-fullconenat
+        - fullconenat
+        - luci-app-partexp
+        - momo
+        - luci-app-momo
+        - nikki
+        - luci-app-nikki
+        - luci-app-zerotier
+        - luci-app-wechatpush
+        - luci-app-autoreboot
+        - mosdns
+        - luci-app-mosdns
+        - luci-app-passwall
+        - luci-app-passwall2
+        - openwrt-bandix
+        - luci-app-bandix
+        - luci-lib-docker
+        - luci-app-dockerman
+        - luci-app-diskman
+        - luci-theme-argon
+        - luci-app-argon-config
+
+    - label: kenzok8/jell
+      url: https://github.com/kenzok8/jell.git
+      branch: main
+      packages:
+        - v2ray-core
+        - v2ray-geodata
+        - luci-app-quickfile
+
+  external:
+    smartdns:
+      repo: https://github.com/pymumu/openwrt-smartdns.git
+      target: feeds/packages/net/smartdns
+      patches:
+        - 100-smartdns-optimize.patch
+    luci_app_smartdns:
+      repo: https://github.com/pymumu/luci-app-smartdns.git
+      target: feeds/luci/applications/luci-app-smartdns
+      patches: []
+    luci_app_quickfile:
+      repo: https://github.com/sbwml/luci-app-quickfile.git
+      target: package/emortal/quickfile
+      patches: []
+
+# Patch 管理
+patches:
+  homeproxy:
+    target: custom_feed/luci-app-homeproxy
+    files:
+      - 003-homeproxy-singbox-1.13-sniff.patch
+      - 004-homeproxy-js-validator.patch
+      - 005-homeproxy-client-ui.patch
+      - 006-homeproxy-node-ui.patch
+      - 007-homeproxy-uci-defaults.patch
+      - 008-homeproxy-generate-client.patch
+      - 009-homeproxy-migrate-config.patch
+
+  dockerman:
+    target: custom_feed/luci-app-dockerman
+    files:
+      - 012-dockerman-menu-order.patch
+      - 996-dockerman-events-timeout.patch
+      - 997-dockerman-rpc-events-timeout.patch
+
+  argon:
+    target: custom_feed/luci-theme-argon
+    files:
+      - 021-argon-wget-depends.patch
+
+  passwall:
+    target: custom_feed/luci-app-passwall
+    files:
+      - 018-passwall-xray-util.patch
+
+  bandix:
+    target: custom_feed/openwrt-bandix
+    files:
+      - 011-bandix-default-enabled.patch
+
+  quickstart:
+    target: custom_feed/luci-app-quickstart
+    files:
+      - 010-quickstart-istore-backend-cpu-temp.patch
+
+  oaf:
+    target: custom_feed/open-app-filter
+    files:
+      - 020-oaf-appfilter-config.patch
+
+  ttyd:
+    target: feeds/packages/utils/ttyd
+    files:
+      - 014-ttyd-autologin.patch
+
+  miniupnpd:
+    target: feeds/packages/net/miniupnpd
+    files:
+      - 999-chanage-default-leaseduration.patch
+
+  adguardhome:
+    target: custom_feed/luci-app-adguardhome
+    files:
+      - 995-adguardhome-rpcd.patch
+
+  pbr:
+    target: feeds/packages/net/pbr
+    files:
+      - 019-pbr-ip-forward.patch
+
+  upstream:
+    target: scripts/package-metadata.pl
+    files:
+      - 001-fix-provides-version-parsing.patch
+
+  build_signature:
+    target: feeds/luci
+    files:
+      - 013-build-signature.patch
+
+  samba4_menu:
+    target: feeds/luci/applications/luci-app-samba4
+    files:
+      - 015-menu-samba4.patch
+
+  bandix_menu:
+    target: custom_feed/luci-app-bandix
+    files:
+      - 016-menu-bandix.patch
+
+# UCI 默认配置
+uci_defaults:
+  theme: argon
+  lan_addr: 192.168.168.1
+  files:
+    - source: patches/990_set_argon_primary
+      target: 990_set_argon_primary
+    - source: patches/991_custom_settings
+      target: 991_custom_settings
+    - source: patches/994_adguardhome-config
+      target: 994_adguardhome-config
+    - source: patches/995_pbr_isp_config
+      target: 995_pbr_isp_config
+    - source: patches/992-docker-service-timeouts
+      target: 992-docker-service-timeouts
+
+# PBR 多 ISP 路由
+pbr:
+  isps:
+    - cmcc
+    - ctcc
+    - cucc
+  config_dir: patches
+
+# 系统配置
+system:
+  smp_affinity: patches/smp_affinity
+  monitoring_scripts:
+    cpuusage: patches/cpuusage
+    hnatusage: patches/hnatusage
+    tempinfo: patches/tempinfo
+    nss_diag: patches/nss_diag.sh
+  cron_tasks:
+    - schedule: "15 3 * * *"
+      command: "sync && echo 3 > /proc/sys/vm/drop_caches"
+
+# Docker 配置
+docker:
+  firewall_backend: nftables
+  storage_driver: overlay2
+  data_root: /opt/docker
+  registry_mirrors:
+    - https://docker.1ms.run
+    - https://docker.xuanyuan.me
+    - https://docker.m.daocloud.io
+
+# 构建步骤
+steps:
+  - clone
+  - feeds_update
+  - feeds_install
+  - remove_packages
+  - install_custom_feed
+  - apply_patches
+  - system_config
+  - docker_config
+  - generate_config
+  - make_download
+  - make_build
+  - package_output
