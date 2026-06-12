@@ -70,13 +70,20 @@ class PackageManager:
                 if not only_package_feeds:
                     paths.append(base_feeds / "packages" / "utils" / pkg)
                 paths.append(base_pkg_feeds / "packages" / pkg)
+            # 回退：某些包直接位于 feeds/packages/<pkg>（不在子分类目录下）
+            if not only_package_feeds:
+                paths.append(base_feeds / "packages" / pkg)
+            paths.append(base_pkg_feeds / "packages" / pkg)
             return paths
 
         for category in ("luci_apps", "net_packages", "utils"):
             for pkg in remove_config.get(category, []):
                 for path in search_paths(category, pkg):
-                    if path.exists():
-                        shutil.rmtree(path)
+                    if path.is_symlink() or path.exists():
+                        if path.is_symlink():
+                            path.unlink()
+                        else:
+                            shutil.rmtree(path)
                         total_removed += 1
                         removed_names.add(pkg)
 
@@ -127,20 +134,35 @@ class PackageManager:
                 if not depends_block:
                     continue
 
-                dep_names = set(re.findall(r'\+([a-zA-Z0-9_-]+)', depends_block))
+                # 提取所有 +<name> 依赖标记
+                raw_deps = re.findall(r'\+([a-zA-Z0-9_./+-]+)', depends_block)
+                # 解析条件依赖格式 +PACKAGE_X:Y → 取 Y 作为实际包名
+                dep_names: set[str] = set()
+                for dep in raw_deps:
+                    if ":" in dep:
+                        # +PACKAGE_xray-core:xray-core → xray-core
+                        dep_names.add(dep.split(":", 1)[1])
+                    else:
+                        dep_names.add(dep)
                 matched = dep_names & removed_names
                 if not matched:
                     continue
 
                 pkg_dir = makefile.parent
-                if not pkg_dir.exists() or pkg_dir == feeds_base:
+                if pkg_dir == feeds_base:
+                    continue
+                # 跳过不存在的目录（包括 dangling symlink），但 dangling symlink 本身需要清理
+                if not (pkg_dir.is_symlink() or pkg_dir.exists()):
                     continue
 
                 rel = pkg_dir.relative_to(feeds_base)
                 if str(rel).count("/") < 1:
                     continue
 
-                shutil.rmtree(pkg_dir)
+                if pkg_dir.is_symlink():
+                    pkg_dir.unlink()
+                else:
+                    shutil.rmtree(pkg_dir)
                 orphaned.append(pkg_dir.name)
                 self.logger.debug(
                     f"自动清理孤儿包: {pkg_dir.name} "
