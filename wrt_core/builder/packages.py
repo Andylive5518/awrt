@@ -8,6 +8,7 @@
 """
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -33,17 +34,20 @@ class PackageManager:
             return True
 
         total_removed = 0
+        removed_names: set[str] = set()
 
         # 移除 luci_apps
         for pkg in remove_config.get("luci_apps", []):
             paths = [
                 self.build_dir / "feeds" / "luci" / "applications" / pkg,
                 self.build_dir / "feeds" / "luci" / "themes" / pkg,
+                self.build_dir / "feeds" / "luci" / "collections" / pkg,
             ]
             for path in paths:
                 if path.exists():
                     shutil.rmtree(path)
                     total_removed += 1
+                    removed_names.add(pkg)
 
         # 移除 net_packages
         for pkg in remove_config.get("net_packages", []):
@@ -51,6 +55,7 @@ class PackageManager:
             if path.exists():
                 shutil.rmtree(path)
                 total_removed += 1
+                removed_names.add(pkg)
 
         # 移除 utils
         for pkg in remove_config.get("utils", []):
@@ -58,9 +63,73 @@ class PackageManager:
             if path.exists():
                 shutil.rmtree(path)
                 total_removed += 1
+                removed_names.add(pkg)
 
         self.logger.ok(f"已移除 {total_removed} 个不需要的包目录")
+
+        # 自动清理依赖已删除包的包
+        orphaned = self._remove_orphaned_dependents(removed_names)
+        if orphaned:
+            self.logger.ok(f"自动清理了 {len(orphaned)} 个因依赖缺失的孤儿包: {', '.join(orphaned)}")
+
         return True
+
+    def _remove_orphaned_dependents(self, removed_names: set[str]) -> list[str]:
+        """扫描所有 feeds 中的 Makefile，删除依赖已删除包的包。
+
+        这是避免手动追踪"依赖者的依赖者"的通用方案。
+        会将 DEPENDS 行（含多行续行）中的所有包名提取出来，
+        与已删除的包名集合做匹配。
+        """
+        orphaned: list[str] = []
+        feeds_base = self.build_dir / "feeds"
+        if not feeds_base.exists():
+            return orphaned
+
+        for makefile in feeds_base.rglob("Makefile"):
+            content = makefile.read_text()
+
+            # 提取 DEPENDS/BUILD_DEPENDS 块：从 "DEPENDS:=" 或 "BUILD_DEPENDS:=" 开始到下一个非续行
+            depends_block = ""
+            in_depends = False
+            for line in content.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("DEPENDS:=") or stripped.startswith("BUILD_DEPENDS:="):
+                    depends_block = stripped
+                    in_depends = True
+                elif in_depends and stripped.endswith("\\"):
+                    depends_block += " " + stripped.rstrip("\\").strip()
+                elif in_depends:
+                    depends_block += " " + stripped
+                    in_depends = False
+
+            if not depends_block:
+                continue
+
+            # 提取所有 +xxx 包名
+            dep_names = set(re.findall(r'\+([a-zA-Z0-9_-]+)', depends_block))
+
+            # 检查是否有任何依赖指向已删除的包
+            matched = dep_names & removed_names
+            if not matched:
+                continue
+
+            pkg_dir = makefile.parent
+            if not pkg_dir.exists() or pkg_dir == feeds_base:
+                continue
+
+            rel = pkg_dir.relative_to(feeds_base)
+            if str(rel).count("/") < 1:
+                continue
+
+            shutil.rmtree(pkg_dir)
+            orphaned.append(pkg_dir.name)
+            self.logger.debug(
+                f"自动清理孤儿包: {pkg_dir.name} "
+                f"(依赖 {', '.join(sorted(matched))})"
+            )
+
+        return orphaned
 
     def remove_tweaked(self) -> bool:
         """注释掉 target.mk 中的 tweak 包。"""
