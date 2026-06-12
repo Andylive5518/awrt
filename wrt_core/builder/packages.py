@@ -100,8 +100,8 @@ class PackageManager:
                                     only_package_feeds: bool = False) -> list[str]:
         """扫描所有 feeds/package/feeds 中的 Makefile，删除依赖已删除包的包。
 
-        会将 DEPENDS/BUILD_DEPENDS 行（含多行续行）中的所有包名提取出来，
-        与已删除的包名集合做匹配。
+        提取所有 DEPENDS/BUILD_DEPENDS/PKG_BUILD_DEPENDS/LUCI_DEPENDS 行
+        （含多行续行）中的包名，与已删除的包名集合做匹配。
         """
         orphaned: list[str] = []
 
@@ -110,40 +110,69 @@ class PackageManager:
             scan_dirs.append(self.build_dir / "feeds")
         scan_dirs.append(self.build_dir / "package" / "feeds")
 
+        # 所有需要扫描的依赖声明前缀
+        depends_prefixes = (
+            "DEPENDS:=", "DEPENDS+=",
+            "BUILD_DEPENDS:=", "BUILD_DEPENDS+=",
+            "PKG_BUILD_DEPENDS:=", "PKG_BUILD_DEPENDS+=",
+            "LUCI_DEPENDS:=", "LUCI_DEPENDS+=",
+        )
+
         for feeds_base in scan_dirs:
             if not feeds_base.exists():
                 continue
 
             for makefile in feeds_base.rglob("Makefile"):
                 content = makefile.read_text()
+                lines = content.split("\n")
 
-                # 提取 DEPENDS/BUILD_DEPENDS 块
-                depends_block = ""
+                # 收集所有依赖声明行（可能含续行）
+                depends_blocks: list[str] = []
+                current_block = ""
                 in_depends = False
-                for line in content.split("\n"):
+                for line in lines:
                     stripped = line.strip()
-                    if stripped.startswith("DEPENDS:=") or stripped.startswith("BUILD_DEPENDS:="):
-                        depends_block = stripped
+                    if stripped.startswith(depends_prefixes):
+                        # 遇到新的 DEPENDS 行，先保存上一个块
+                        if current_block:
+                            depends_blocks.append(current_block)
+                        current_block = stripped
                         in_depends = True
                     elif in_depends and stripped.endswith("\\"):
-                        depends_block += " " + stripped.rstrip("\\").strip()
+                        current_block += " " + stripped.rstrip("\\").strip()
                     elif in_depends:
-                        depends_block += " " + stripped
+                        current_block += " " + stripped
+                        depends_blocks.append(current_block)
+                        current_block = ""
                         in_depends = False
+                if current_block:
+                    depends_blocks.append(current_block)
 
-                if not depends_block:
+                if not depends_blocks:
                     continue
 
-                # 提取所有 +<name> 依赖标记
-                raw_deps = re.findall(r'\+([a-zA-Z0-9_./+-]+)', depends_block)
-                # 解析条件依赖格式 +PACKAGE_X:Y → 取 Y 作为实际包名
+                # 从所有依赖块中提取包名
                 dep_names: set[str] = set()
-                for dep in raw_deps:
-                    if ":" in dep:
-                        # +PACKAGE_xray-core:xray-core → xray-core
-                        dep_names.add(dep.split(":", 1)[1])
-                    else:
-                        dep_names.add(dep)
+                for block in depends_blocks:
+                    # 先处理条件依赖 +PACKAGE_X:Y → 取 Y
+                    # 再处理普通依赖 +pkg 或 pkg（无 + 前缀）
+                    # 匹配所有 +<name> 标记
+                    raw_deps = re.findall(r'\+([a-zA-Z0-9_./+-]+)', block)
+                    for dep in raw_deps:
+                        if ":" in dep:
+                            dep_names.add(dep.split(":", 1)[1])
+                        else:
+                            dep_names.add(dep)
+                    # 也匹配无 + 前缀的包名（如 DEPENDS:=cups）
+                    # 去掉赋值前缀后，按空白/换行分割
+                    no_prefix_deps = re.findall(
+                        r'(?:^|\s)([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)*)(?=\s|$)',
+                        block.split(":=", 1)[-1].split("+=", 1)[-1],
+                    )
+                    for dep in no_prefix_deps:
+                        if dep and not dep.startswith("+"):
+                            dep_names.add(dep)
+
                 matched = dep_names & removed_names
                 if not matched:
                     continue
@@ -151,7 +180,6 @@ class PackageManager:
                 pkg_dir = makefile.parent
                 if pkg_dir == feeds_base:
                     continue
-                # 跳过不存在的目录（包括 dangling symlink），但 dangling symlink 本身需要清理
                 if not (pkg_dir.is_symlink() or pkg_dir.exists()):
                     continue
 
