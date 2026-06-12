@@ -3,9 +3,6 @@
 .claude/
 .omc/
 *.md
-!CLAUDE.md
-!task_plan.md
-!progress.md
 .reasonix/
 docs/
 .venv
