@@ -343,12 +343,12 @@ docker:
 steps:
   - clone
   - feeds_update
-  - feeds_install
   - remove_packages
   - install_custom_feed
   - apply_patches
   - system_config
   - docker_config
+  - feeds_install
   - generate_config
   - make_download
   - make_build

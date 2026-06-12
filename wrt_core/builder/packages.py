@@ -75,59 +75,67 @@ class PackageManager:
         return True
 
     def _remove_orphaned_dependents(self, removed_names: set[str]) -> list[str]:
-        """扫描所有 feeds 中的 Makefile，删除依赖已删除包的包。
+        """扫描所有 feeds 和 package/feeds 中的 Makefile，删除依赖已删除包的包。
 
         这是避免手动追踪"依赖者的依赖者"的通用方案。
-        会将 DEPENDS 行（含多行续行）中的所有包名提取出来，
+        会将 DEPENDS/BUILD_DEPENDS 行（含多行续行）中的所有包名提取出来，
         与已删除的包名集合做匹配。
         """
         orphaned: list[str] = []
-        feeds_base = self.build_dir / "feeds"
-        if not feeds_base.exists():
-            return orphaned
 
-        for makefile in feeds_base.rglob("Makefile"):
-            content = makefile.read_text()
+        # 同时扫描 feeds/ 和 package/feeds/
+        # feeds/ 是原始 feed 源，package/feeds/ 是 feeds install 后的链接
+        scan_dirs = [
+            self.build_dir / "feeds",
+            self.build_dir / "package" / "feeds",
+        ]
 
-            # 提取 DEPENDS/BUILD_DEPENDS 块：从 "DEPENDS:=" 或 "BUILD_DEPENDS:=" 开始到下一个非续行
-            depends_block = ""
-            in_depends = False
-            for line in content.split("\n"):
-                stripped = line.strip()
-                if stripped.startswith("DEPENDS:=") or stripped.startswith("BUILD_DEPENDS:="):
-                    depends_block = stripped
-                    in_depends = True
-                elif in_depends and stripped.endswith("\\"):
-                    depends_block += " " + stripped.rstrip("\\").strip()
-                elif in_depends:
-                    depends_block += " " + stripped
-                    in_depends = False
-
-            if not depends_block:
+        for feeds_base in scan_dirs:
+            if not feeds_base.exists():
                 continue
 
-            # 提取所有 +xxx 包名
-            dep_names = set(re.findall(r'\+([a-zA-Z0-9_-]+)', depends_block))
+            for makefile in feeds_base.rglob("Makefile"):
+                content = makefile.read_text()
 
-            # 检查是否有任何依赖指向已删除的包
-            matched = dep_names & removed_names
-            if not matched:
-                continue
+                # 提取 DEPENDS/BUILD_DEPENDS 块：从 "DEPENDS:=" 或 "BUILD_DEPENDS:=" 开始到下一个非续行
+                depends_block = ""
+                in_depends = False
+                for line in content.split("\n"):
+                    stripped = line.strip()
+                    if stripped.startswith("DEPENDS:=") or stripped.startswith("BUILD_DEPENDS:="):
+                        depends_block = stripped
+                        in_depends = True
+                    elif in_depends and stripped.endswith("\\"):
+                        depends_block += " " + stripped.rstrip("\\").strip()
+                    elif in_depends:
+                        depends_block += " " + stripped
+                        in_depends = False
 
-            pkg_dir = makefile.parent
-            if not pkg_dir.exists() or pkg_dir == feeds_base:
-                continue
+                if not depends_block:
+                    continue
 
-            rel = pkg_dir.relative_to(feeds_base)
-            if str(rel).count("/") < 1:
-                continue
+                # 提取所有 +xxx 包名
+                dep_names = set(re.findall(r'\+([a-zA-Z0-9_-]+)', depends_block))
 
-            shutil.rmtree(pkg_dir)
-            orphaned.append(pkg_dir.name)
-            self.logger.debug(
-                f"自动清理孤儿包: {pkg_dir.name} "
-                f"(依赖 {', '.join(sorted(matched))})"
-            )
+                # 检查是否有任何依赖指向已删除的包
+                matched = dep_names & removed_names
+                if not matched:
+                    continue
+
+                pkg_dir = makefile.parent
+                if not pkg_dir.exists() or pkg_dir == feeds_base:
+                    continue
+
+                rel = pkg_dir.relative_to(feeds_base)
+                if str(rel).count("/") < 1:
+                    continue
+
+                shutil.rmtree(pkg_dir)
+                orphaned.append(pkg_dir.name)
+                self.logger.debug(
+                    f"自动清理孤儿包: {pkg_dir.name} "
+                    f"(依赖 {', '.join(sorted(matched))})"
+                )
 
         return orphaned
 
