@@ -141,6 +141,7 @@ def main():
             "feeds_update": feeds.update_feeds,
             "feeds_install": feeds.install_feeds,
             "remove_packages": packages.remove_unwanted,
+            "remove_package_links": packages.remove_package_links,
             "install_custom_feed": feeds.install_custom_feed,
             "apply_patches": lambda: all(
                 r.fail_count == 0

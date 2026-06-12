@@ -27,7 +27,19 @@ class PackageManager:
         self.logger = logger
 
     def remove_unwanted(self) -> bool:
-        """从 feeds 中删除不需要的包。"""
+        """从 feeds 和 package/feeds 中删除不需要的包。"""
+        return self._remove_configured()
+
+    def remove_package_links(self) -> bool:
+        """从 package/feeds 中删除不需要的包（feeds install 后执行）。
+
+        feeds install 根据索引重新创建了 package/feeds/ 下的包，
+        需要再次清理。
+        """
+        return self._remove_configured(only_package_feeds=True)
+
+    def _remove_configured(self, only_package_feeds: bool = False) -> bool:
+        """根据 build.yaml 配置删除不需要的包。"""
         remove_config = self.config.packages.remove
         if not remove_config:
             self.logger.skip("没有配置要移除的包")
@@ -36,59 +48,60 @@ class PackageManager:
         total_removed = 0
         removed_names: set[str] = set()
 
-        # 移除 luci_apps
-        for pkg in remove_config.get("luci_apps", []):
-            paths = [
-                self.build_dir / "feeds" / "luci" / "applications" / pkg,
-                self.build_dir / "feeds" / "luci" / "themes" / pkg,
-                self.build_dir / "feeds" / "luci" / "collections" / pkg,
-            ]
-            for path in paths:
-                if path.exists():
-                    shutil.rmtree(path)
-                    total_removed += 1
-                    removed_names.add(pkg)
+        base_feeds = self.build_dir / "feeds"
+        base_pkg_feeds = self.build_dir / "package" / "feeds"
 
-        # 移除 net_packages
-        for pkg in remove_config.get("net_packages", []):
-            path = self.build_dir / "feeds" / "packages" / "net" / pkg
-            if path.exists():
-                shutil.rmtree(path)
-                total_removed += 1
-                removed_names.add(pkg)
+        # 构建搜索路径列表
+        def search_paths(category: str, pkg: str) -> list[Path]:
+            paths = []
+            if category == "luci_apps":
+                if not only_package_feeds:
+                    paths.extend([
+                        base_feeds / "luci" / "applications" / pkg,
+                        base_feeds / "luci" / "themes" / pkg,
+                        base_feeds / "luci" / "collections" / pkg,
+                    ])
+                paths.append(base_pkg_feeds / "luci" / pkg)
+            elif category == "net_packages":
+                if not only_package_feeds:
+                    paths.append(base_feeds / "packages" / "net" / pkg)
+                paths.append(base_pkg_feeds / "packages" / pkg)
+            elif category == "utils":
+                if not only_package_feeds:
+                    paths.append(base_feeds / "packages" / "utils" / pkg)
+                paths.append(base_pkg_feeds / "packages" / pkg)
+            return paths
 
-        # 移除 utils
-        for pkg in remove_config.get("utils", []):
-            path = self.build_dir / "feeds" / "packages" / "utils" / pkg
-            if path.exists():
-                shutil.rmtree(path)
-                total_removed += 1
-                removed_names.add(pkg)
+        for category in ("luci_apps", "net_packages", "utils"):
+            for pkg in remove_config.get(category, []):
+                for path in search_paths(category, pkg):
+                    if path.exists():
+                        shutil.rmtree(path)
+                        total_removed += 1
+                        removed_names.add(pkg)
 
         self.logger.ok(f"已移除 {total_removed} 个不需要的包目录")
 
         # 自动清理依赖已删除包的包
-        orphaned = self._remove_orphaned_dependents(removed_names)
+        orphaned = self._remove_orphaned_dependents(removed_names, only_package_feeds)
         if orphaned:
             self.logger.ok(f"自动清理了 {len(orphaned)} 个因依赖缺失的孤儿包: {', '.join(orphaned)}")
 
         return True
 
-    def _remove_orphaned_dependents(self, removed_names: set[str]) -> list[str]:
-        """扫描所有 feeds 和 package/feeds 中的 Makefile，删除依赖已删除包的包。
+    def _remove_orphaned_dependents(self, removed_names: set[str],
+                                    only_package_feeds: bool = False) -> list[str]:
+        """扫描所有 feeds/package/feeds 中的 Makefile，删除依赖已删除包的包。
 
-        这是避免手动追踪"依赖者的依赖者"的通用方案。
         会将 DEPENDS/BUILD_DEPENDS 行（含多行续行）中的所有包名提取出来，
         与已删除的包名集合做匹配。
         """
         orphaned: list[str] = []
 
-        # 同时扫描 feeds/ 和 package/feeds/
-        # feeds/ 是原始 feed 源，package/feeds/ 是 feeds install 后的链接
-        scan_dirs = [
-            self.build_dir / "feeds",
-            self.build_dir / "package" / "feeds",
-        ]
+        scan_dirs = []
+        if not only_package_feeds:
+            scan_dirs.append(self.build_dir / "feeds")
+        scan_dirs.append(self.build_dir / "package" / "feeds")
 
         for feeds_base in scan_dirs:
             if not feeds_base.exists():
@@ -97,7 +110,7 @@ class PackageManager:
             for makefile in feeds_base.rglob("Makefile"):
                 content = makefile.read_text()
 
-                # 提取 DEPENDS/BUILD_DEPENDS 块：从 "DEPENDS:=" 或 "BUILD_DEPENDS:=" 开始到下一个非续行
+                # 提取 DEPENDS/BUILD_DEPENDS 块
                 depends_block = ""
                 in_depends = False
                 for line in content.split("\n"):
@@ -114,10 +127,7 @@ class PackageManager:
                 if not depends_block:
                     continue
 
-                # 提取所有 +xxx 包名
                 dep_names = set(re.findall(r'\+([a-zA-Z0-9_-]+)', depends_block))
-
-                # 检查是否有任何依赖指向已删除的包
                 matched = dep_names & removed_names
                 if not matched:
                     continue
@@ -174,7 +184,6 @@ class PackageManager:
             content = makefile.read_text()
             if "luci-app-attendedsysupgrade" in content:
                 content = content.replace("luci-app-attendedsysupgrade", "")
-                # 清理空行
                 lines = [l for l in content.split("\n") if l.strip()]
                 makefile.write_text("\n".join(lines) + "\n")
                 found = True
@@ -185,10 +194,7 @@ class PackageManager:
         return True
 
     def fix_apk_versions(self) -> bool:
-        """修复 APK 版本号格式兼容性。
-
-        对配置中 apk_fixes 指定的包，应用对应的 version patch 文件。
-        """
+        """修复 APK 版本号格式兼容性。"""
         apk_fixes = self.config.packages.apk_fixes
         if not apk_fixes:
             self.logger.skip("没有配置 APK 版本修复")
@@ -203,7 +209,6 @@ class PackageManager:
                 self.logger.warn(f"APK 修复 patch 不存在: {patch_file}")
                 continue
 
-            # 查找包目录
             pkg_dirs = [
                 custom_feed_dir / pkg_name,
                 self.build_dir / "feeds" / "luci" / "applications" / pkg_name,
@@ -219,7 +224,6 @@ class PackageManager:
                 self.logger.skip(f"包目录不存在: {pkg_name}，跳过 APK 版本修复")
                 continue
 
-            # dry-run 检测
             result = subprocess.run(
                 ["patch", "--dry-run", "-p1", "-d", str(target_dir), "-i", str(patch_file)],
                 capture_output=True, text=True, check=False,
@@ -228,7 +232,6 @@ class PackageManager:
                 self.logger.skip(f"{pkg_name}: APK 版本 patch 已存在或无法应用")
                 continue
 
-            # 应用 patch
             result = subprocess.run(
                 ["patch", "-p1", "-d", str(target_dir), "-i", str(patch_file)],
                 capture_output=True, text=True, check=False,

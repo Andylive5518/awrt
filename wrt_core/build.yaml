@@ -349,6 +349,7 @@ steps:
   - system_config
   - docker_config
   - feeds_install
+  - remove_package_links
   - generate_config
   - make_download
   - make_build
