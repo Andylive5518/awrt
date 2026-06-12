@@ -74,6 +74,7 @@ main() {
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
+    fix_netfilter_kmod_clash
     install_feeds
     verify_custom_feed_installed_paths
     fix_apk_package_versions

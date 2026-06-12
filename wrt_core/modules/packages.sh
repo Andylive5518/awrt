@@ -438,3 +438,39 @@ remove_attendedsysupgrade() {
         fi
     done
 }
+
+# 修复 kernel 6.18 上 kmod-iptables 与 kmod-nf-ipt 文件冲突
+# 根因：上游 commit 94c7f4a 给 kmod-iptables 添加了显式 FILES 列表
+# （ip_tables.ko, x_tables.ko），而这些文件 kmod-nf-ipt 也提供。
+# 修复方案（上游 PR #23631）：从 kmod-iptables 的 FILES 中删除冲突文件，
+# 让 kmod-nf-ipt 作为唯一提供者。
+fix_netfilter_kmod_clash() {
+    local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
+
+    if [ ! -f "$netfilter_mk" ]; then
+        echo "fix_netfilter_kmod_clash: netfilter.mk 不存在，跳过"
+        return 0
+    fi
+
+    if ! grep -q 'ip_tables.ko' "$netfilter_mk"; then
+        echo "fix_netfilter_kmod_clash: 已修复，跳过"
+        return 0
+    fi
+
+    echo "正在修复 kmod-iptables 与 kmod-nf-ipt 文件冲突..."
+
+    # 在 KernelPackage/iptables 块内：
+    # 删除 ip_tables.ko 和 x_tables.ko 行，将 FILES:= \ 改为 FILES:=
+    sed -i '/^  DEPENDS:=@!LINUX_6_12$/,/AUTOLOAD:=\$(call AutoProbe,\$(notdir ip_tables x_tables))$/{
+        /ip_tables.ko/d
+        /x_tables.ko/d
+        s/^  FILES:= \\$/  FILES:=/
+    }' "$netfilter_mk"
+
+    if grep -q 'ip_tables.ko' "$netfilter_mk"; then
+        echo "错误：修复 netfilter.mk 失败，ip_tables.ko 仍然存在" >&2
+        return 1
+    fi
+
+    echo "kmod-iptables FILES 已清空，kmod-nf-ipt 将作为 ip_tables.ko / x_tables.ko 的唯一提供者"
+}
