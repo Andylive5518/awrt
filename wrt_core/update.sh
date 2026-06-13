@@ -46,6 +46,7 @@ main() {
     fix_miniupnpd
     update_golang
     fix_mk_def_depends
+    remove_tweaked_packages
     update_default_lan_addr
     remove_something_nss_kmod
     update_affinity_script
@@ -65,12 +66,16 @@ main() {
     update_smartdns
     patch_smartdns
     update_dockerman
+    fix_dockerman_menu_order
+    fix_dockerman_events_timeout
+    fix_dockerman_rpc_events_timeout
     set_nginx_default_config
     update_uwsgi_limit_as
     update_nginx_ubus_module
     check_default_settings
     # fix_apk_repo_mirrors
     fix_bandix_default_enabled
+    fix_adguardhome_rpcd
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency

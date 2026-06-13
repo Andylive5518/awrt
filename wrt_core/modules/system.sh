@@ -230,7 +230,12 @@ update_oaf_deconfig() {
 }
 
 fix_dockerman_menu_order() {
-    local dir="$(get_custom_feed_worktree_dir)/luci-app-dockerman"
+    local dir
+    # dockerman 由 update_dockerman() 安装到 feeds/luci/applications/
+    # 不在 custom_feed 中
+    for dir in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman" "$(get_custom_feed_worktree_dir)/luci-app-dockerman"; do
+        [ -f "$dir/root/usr/share/luci/menu.d/luci-app-dockerman.json" ] && break
+    done
     local patch_file="$BASE_PATH/patches/012-dockerman-menu-order.patch"
     [ -f "$dir/root/usr/share/luci/menu.d/luci-app-dockerman.json" ] || return 0
     if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
@@ -252,7 +257,10 @@ fix_adguardhome_rpcd() {
 # 用 socket.poll 替代无限阻塞的 sock.recv，总超时 5 秒
 fix_dockerman_events_timeout() {
     local script
-    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/ucode/controller/docker.uc"
+    # dockerman 由 update_dockerman() 安装到 feeds/luci/applications/
+    for script in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/ucode/controller/docker.uc" "$(get_custom_feed_worktree_dir)/luci-app-dockerman/ucode/controller/docker.uc"; do
+        [ -f "$script" ] && break
+    done
     [ -f "$script" ] || { echo "[dockerman] docker.uc not found, skip"; return 0; }
 
     patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/996-dockerman-events-timeout.patch" && \
@@ -264,7 +272,10 @@ fix_dockerman_events_timeout() {
 # Docker 不发 chunked 终止块时不退出，加 8 秒总超时
 fix_dockerman_rpc_events_timeout() {
     local script
-    script="$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc"
+    # dockerman 由 update_dockerman() 安装到 feeds/luci/applications/
+    for script in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc" "$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc"; do
+        [ -f "$script" ] && break
+    done
     [ -f "$script" ] || { echo "[dockerman-rpc] docker_rpc.uc not found, skip"; return 0; }
 
     patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/997-dockerman-rpc-events-timeout.patch" && \
@@ -452,13 +463,16 @@ fix_bandix_default_enabled() {
 fix_apk_package_versions() {
     local custom_feed_dir entry pkg_name makefile patch_file msg
 
-    # update.sh 执行期间 ${BUILD_DIR}/.config 尚未生成，改用 deconfig 源文件
-    grep -q '^CONFIG_USE_APK=y' "$CONFIG_FILE" 2>/dev/null || return 0
+    # CONFIG_USE_APK=y 在 compile_base.config 片段中，不在主配置文件
+    # 需要搜索所有 deconfig 文件
+    grep -q '^CONFIG_USE_APK=y' "$BASE_PATH"/deconfig/*.config 2>/dev/null || return 0
 
     echo "检测到 APK 包管理器，修复不兼容的版本号格式..."
     custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
 
     # 包名 -> patch 文件映射
+    # 格式: "包名:patch文件名:描述"
+    # 查找顺序: custom_feed -> feeds/luci/libs -> feeds/luci/applications
     local patches=(
         "luci-lib-docker:021-luci-lib-docker-apk-version.patch:版本号前缀 v 已去除"
         "luci-app-store:022-luci-app-store-apk-version.patch:版本号分隔符 - 已替换为 PKG_RELEASE"
@@ -470,8 +484,18 @@ fix_apk_package_versions() {
         patch_file="${patch_file%%:*}"
         msg="${entry##*:}"
 
-        makefile="$custom_feed_dir/$pkg_name/Makefile"
-        [ -f "$makefile" ] && [ -f "$patch_file" ] || continue
+        [ -f "$patch_file" ] || { echo "  $pkg_name: 补丁文件 $patch_file 不存在，跳过"; continue; }
+
+        makefile=""
+        # 按优先级查找 Makefile
+        for dir in "$custom_feed_dir" "$BUILD_DIR/feeds/luci/libs" "$BUILD_DIR/feeds/luci/applications"; do
+            if [ -f "$dir/$pkg_name/Makefile" ]; then
+                makefile="$dir/$pkg_name/Makefile"
+                break
+            fi
+        done
+
+        [ -n "$makefile" ] || { echo "  $pkg_name: Makefile 未找到，跳过"; continue; }
 
         if patch --dry-run -p1 -d "$(dirname "$makefile")" -i "$patch_file" >/dev/null 2>&1; then
             patch -p1 -d "$(dirname "$makefile")" -i "$patch_file" && \
@@ -485,7 +509,7 @@ fix_apk_package_versions() {
 fix_apk_file_conflicts() {
     local custom_feed_dir pkg init_script
 
-    grep -q '^CONFIG_USE_APK=y' "$CONFIG_FILE" 2>/dev/null || return 0
+    grep -q '^CONFIG_USE_APK=y' "$BASE_PATH"/deconfig/*.config 2>/dev/null || return 0
 
     custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
 
