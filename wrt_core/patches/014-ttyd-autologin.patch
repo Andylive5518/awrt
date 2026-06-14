@@ -1,9 +1,0 @@
---- --- a/files/ttyd.config	2026-06-08 14:31:37.178355204 +0800
-+++ +++ b/files/ttyd.config	2026-06-08 14:32:27.370191273 +0800
-@@ -1,5 +1,4 @@
- 
- config ttyd
--	option interface '@lan'
--	option command '/bin/login'
-+	option command '/usr/libexec/login.sh'
- 

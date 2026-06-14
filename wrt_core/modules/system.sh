@@ -153,31 +153,31 @@ echo 'option check_signature 0' >> /etc/opkg.conf\n" "$emortal_def_dir/files/99-
 }
 
 set_build_signature() {
-    local dir="$BUILD_DIR/feeds/luci"
-    local target="$dir/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js"
-    local patch_file="$BASE_PATH/patches/013-build-signature.patch"
+    local target="$BUILD_DIR/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js"
     [ -f "$target" ] || return 0
-    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
-        patch -p1 -d "$dir" -i "$patch_file" && echo "[build] signature: build by Alex"
+    if grep -q "build by Alex" "$target"; then
+        echo "[build] signature already applied"
+        return 0
     fi
+    sed -i "s|(luciversion || '')|(luciversion || '') + (' / build by Alex')|" "$target" && \
+        echo "[build] signature: build by Alex"
 }
 
 update_menu_location() {
-    local patch_file
+    local json_file
 
-    patch_file="$BASE_PATH/patches/015-menu-samba4.patch"
-    if [ -d "$BUILD_DIR/feeds/luci/applications/luci-app-samba4" ]; then
-        if patch --dry-run -p1 -d "$BUILD_DIR/feeds/luci/applications/luci-app-samba4" -i "$patch_file" >/dev/null 2>&1; then
-            patch -p1 -d "$BUILD_DIR/feeds/luci/applications/luci-app-samba4" -i "$patch_file"
-        fi
+    # samba4: admin/nas → admin/services
+    json_file="$BUILD_DIR/feeds/luci/applications/luci-app-samba4/root/usr/share/luci/menu.d/luci-app-samba4.json"
+    if [ -f "$json_file" ] && grep -q '"admin/nas/samba4"' "$json_file"; then
+        sed -i 's|"admin/nas/samba4"|"admin/services/samba4"|' "$json_file"
+        echo "[menu] samba4: nas→services"
     fi
 
-    patch_file="$BASE_PATH/patches/016-menu-bandix.patch"
-    local bdir="$(get_custom_feed_source_dir)/luci-app-bandix"
-    if [ -d "$bdir" ]; then
-        if patch --dry-run -p1 -d "$bdir" -i "$patch_file" >/dev/null 2>&1; then
-            patch -p1 -d "$bdir" -i "$patch_file" && echo "[menu] bandix: network→status"
-        fi
+    # bandix: network → status
+    json_file="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d/luci-app-bandix.json"
+    if [ -f "$json_file" ] && grep -q '"admin/network/bandix"' "$json_file"; then
+        sed -i 's|"admin/network/bandix"|"admin/status/bandix"|' "$json_file"
+        echo "[menu] bandix: network→status"
     fi
 }
 
@@ -230,17 +230,17 @@ update_oaf_deconfig() {
 }
 
 fix_dockerman_menu_order() {
-    local dir
+    local json
     # dockerman 由 update_dockerman() 安装到 feeds/luci/applications/
-    # 不在 custom_feed 中
-    for dir in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman" "$(get_custom_feed_worktree_dir)/luci-app-dockerman"; do
-        [ -f "$dir/root/usr/share/luci/menu.d/luci-app-dockerman.json" ] && break
+    for json in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/root/usr/share/luci/menu.d/luci-app-dockerman.json" \
+                "$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/luci/menu.d/luci-app-dockerman.json"; do
+        [ -f "$json" ] && break
     done
-    local patch_file="$BASE_PATH/patches/012-dockerman-menu-order.patch"
-    [ -f "$dir/root/usr/share/luci/menu.d/luci-app-dockerman.json" ] || return 0
-    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
-        patch -p1 -d "$dir" -i "$patch_file" && echo "[menu] dockerman order 40"
+    [ -f "$json" ] || return 0
+    if grep -q '"order": 40' "$json"; then
+        return 0
     fi
+    sed -i 's/"order": "40"/"order": 40/' "$json" && echo "[menu] dockerman order 40"
 }
 
 fix_adguardhome_rpcd() {
@@ -248,22 +248,56 @@ fix_adguardhome_rpcd() {
     script="$(get_custom_feed_worktree_dir)/luci-app-adguardhome/root/usr/libexec/rpcd/luci.adguardhome"
     [ -f "$script" ] || { echo "[adguardhome] rpcd script not found, skip"; return 0; }
 
-    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/995-adguardhome-rpcd.patch" && \
-        echo "[adguardhome] rpcd script patched" || \
-        echo "[adguardhome] rpcd patch failed"
+    # 修复1: http_code} → http_code}
+    if grep -q '%{http_code}' "$script" && ! grep -q '%{http_code}}' "$script"; then
+        sed -i 's|%{http_code}|%{http_code}}|' "$script"
+        echo "[adguardhome] rpcd: http_code brace fix"
+    fi
+    # 修复2: hostname.domain → lan ipaddr
+    if grep -q 'hostname}).$(uci get dhcp' "$script"; then
+        sed -i 's|$(uci get system.@system\[0\].hostname).$(uci get dhcp.@dnsmasq\[0\].domain)|$(uci get network.lan.ipaddr 2>/dev/null)|' "$script"
+        echo "[adguardhome] rpcd: host fallback → lan ipaddr"
+    fi
 }
 
 # Docker 27+/29 的 /events 端点即使带 until 参数也不关闭连接（chunked 无终止符）
 # 用 socket.poll 替代无限阻塞的 sock.recv，总超时 5 秒
 fix_dockerman_events_timeout() {
     local script
-    # dockerman 由 update_dockerman() 安装到 feeds/luci/applications/
-    for script in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/ucode/controller/docker.uc" "$(get_custom_feed_worktree_dir)/luci-app-dockerman/ucode/controller/docker.uc"; do
+    for script in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/ucode/controller/docker.uc" \
+                  "$(get_custom_feed_worktree_dir)/luci-app-dockerman/ucode/controller/docker.uc"; do
         [ -f "$script" ] && break
     done
     [ -f "$script" ] || { echo "[dockerman] docker.uc not found, skip"; return 0; }
 
-    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/996-dockerman-events-timeout.patch" && \
+    # 用 socket.poll 替代无限阻塞的 sock.recv
+    if grep -q 'socket.poll' "$script"; then
+        echo "[dockerman] events timeout already patched"
+        return 0
+    fi
+
+    awk '
+        /stream_response_chunks: function\(sock, blocksize\)/ { in_func = 1; print; next }
+        in_func && /^[[:space:]]*},{0,1}[[:space:]]*$/ {
+            print "\t\tlet chunk;"
+            print "\t\twhile (true) {"
+            print "\t\t\tlet ev = socket.poll([sock], 1000);"
+            print "\t\t\tif (!ev) continue;"
+            print "\t\t\tif (ev & 16) break;"
+            print "\t\t\tif (!(ev & 1)) continue;"
+            print "\t\t\tchunk = sock.recv(blocksize);"
+            print "\t\t\tif (chunk && length(chunk))"
+            print "\t\t\t\tstdout.write(chunk);"
+            print "\t\t\telse"
+            print "\t\t\t\tbreak;"
+            print "\t\t}"
+            in_func = 0
+            print
+            next
+        }
+        in_func { next }
+        { print }
+    ' "$script" > "$script.tmp" && mv "$script.tmp" "$script" && \
         echo "[dockerman] events timeout patched" || \
         echo "[dockerman] events timeout patch failed"
 }
@@ -272,13 +306,18 @@ fix_dockerman_events_timeout() {
 # Docker 不发 chunked 终止块时不退出，加 8 秒总超时
 fix_dockerman_rpc_events_timeout() {
     local script
-    # dockerman 由 update_dockerman() 安装到 feeds/luci/applications/
-    for script in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc" "$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc"; do
+    for script in "$BUILD_DIR/feeds/luci/applications/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc" \
+                  "$(get_custom_feed_worktree_dir)/luci-app-dockerman/root/usr/share/rpcd/ucode/docker_rpc.uc"; do
         [ -f "$script" ] && break
     done
     [ -f "$script" ] || { echo "[dockerman-rpc] docker_rpc.uc not found, skip"; return 0; }
 
-    patch --no-backup-if-mismatch "$script" "$BASE_PATH/patches/997-dockerman-rpc-events-timeout.patch" && \
+    # 修复 poll 误判：ready[0][1] 检查
+    if grep -q 'ready\[0\]\[1\]' "$script"; then
+        echo "[dockerman-rpc] events timeout already patched"
+        return 0
+    fi
+    sed -i 's|if (!ready || !length(ready)) return null;|if (!ready || !length(ready) || !ready[0][1]) return null;|' "$script" && \
         echo "[dockerman-rpc] events timeout patched" || \
         echo "[dockerman-rpc] events timeout patch failed"
 }
@@ -321,13 +360,9 @@ install_pbr_ctcc() { install_pbr_isp "ctcc" "CTCC"; }
 install_pbr_cucc() { install_pbr_isp "cucc" "CUCC"; }
 
 fix_pbr_ip_forward() {
-    local dir="$BUILD_DIR/feeds/packages/net/pbr"
-    local init_script="$dir/files/etc/init.d/pbr"
-    local patch_file="$BASE_PATH/patches/019-pbr-ip-forward.patch"
+    local init_script="$BUILD_DIR/feeds/packages/net/pbr/files/etc/init.d/pbr"
 
-    [ -f "$init_script" ] || {
-        echo "PBR init script not found"; return 1
-    }
+    [ -f "$init_script" ] || { echo "PBR init script not found"; return 1; }
 
     if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$init_script"; then
         echo "PBR IP Forward fix already applied"
@@ -339,13 +374,10 @@ fix_pbr_ip_forward() {
         return 0
     fi
 
-    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
-        patch -p1 -d "$dir" -i "$patch_file" && echo "PBR IP Forward 修复成功" || {
-            echo "PBR IP Forward 修复失败" >&2; return 1
-        }
-    else
-        echo "PBR: 补丁无法应用" >&2; return 1
-    fi
+    sed -i 's|\[ -n "$strict_enforcement" \] && \[ "$(cat /proc/sys/net/ipv4/ip_forward)" != "0" \]|\[ -n "$enabled" \] \&\& \[ -n "$strict_enforcement" \] \&\& \[ "$(cat /proc/sys/net/ipv4/ip_forward)" != "0" \]|' "$init_script" && \
+        echo "PBR IP Forward 修复成功" || {
+        echo "PBR IP Forward 修复失败" >&2; return 1
+    }
 }
 
 set_nginx_default_config() {
@@ -406,12 +438,14 @@ remove_tweaked_packages() {
 }
 
 enable_ttyd_autologin() {
-    local dir="$BUILD_DIR/feeds/packages/utils/ttyd"
-    local patch_file="$BASE_PATH/patches/014-ttyd-autologin.patch"
-    [ -f "$dir/files/ttyd.config" ] || return 0
-    if patch --dry-run -p1 -d "$dir" -i "$patch_file" >/dev/null 2>&1; then
-        patch -p1 -d "$dir" -i "$patch_file" && echo "[ttyd] 自动登录"
+    local config="$BUILD_DIR/feeds/packages/utils/ttyd/files/ttyd.config"
+    [ -f "$config" ] || return 0
+    if grep -q "option command '/usr/libexec/login.sh'" "$config"; then
+        return 0
     fi
+    sed -i "/option interface '@lan'/d" "$config"
+    sed -i "s|option command '/bin/login'|option command '/usr/libexec/login.sh'|" "$config"
+    echo "[ttyd] 自动登录"
 }
 
 fix_homeproxy_patches() {
@@ -461,49 +495,30 @@ fix_bandix_default_enabled() {
 
 
 fix_apk_package_versions() {
-    local custom_feed_dir entry pkg_name makefile patch_file msg
+    local custom_feed_dir pkg_name makefile
 
-    # CONFIG_USE_APK=y 在 compile_base.config 片段中，不在主配置文件
-    # 需要搜索所有 deconfig 文件
     grep -q '^CONFIG_USE_APK=y' "$BASE_PATH"/deconfig/*.config 2>/dev/null || return 0
 
     echo "检测到 APK 包管理器，修复不兼容的版本号格式..."
     custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
 
-    # 包名 -> patch 文件映射
-    # 格式: "包名:patch文件名:描述"
-    # 查找顺序: custom_feed -> feeds/luci/libs -> feeds/luci/applications
-    local patches=(
-        "luci-lib-docker:021-luci-lib-docker-apk-version.patch:版本号前缀 v 已去除"
-        "luci-app-store:022-luci-app-store-apk-version.patch:版本号分隔符 - 已替换为 PKG_RELEASE"
-    )
-
-    for entry in "${patches[@]}"; do
-        pkg_name="${entry%%:*}"
-        patch_file="$BASE_PATH/patches/${entry#*:}"
-        patch_file="${patch_file%%:*}"
-        msg="${entry##*:}"
-
-        [ -f "$patch_file" ] || { echo "  $pkg_name: 补丁文件 $patch_file 不存在，跳过"; continue; }
-
-        makefile=""
-        # 按优先级查找 Makefile
-        for dir in "$custom_feed_dir" "$BUILD_DIR/feeds/luci/libs" "$BUILD_DIR/feeds/luci/applications"; do
-            if [ -f "$dir/$pkg_name/Makefile" ]; then
-                makefile="$dir/$pkg_name/Makefile"
-                break
-            fi
-        done
-
-        [ -n "$makefile" ] || { echo "  $pkg_name: Makefile 未找到，跳过"; continue; }
-
-        if patch --dry-run -p1 -d "$(dirname "$makefile")" -i "$patch_file" >/dev/null 2>&1; then
-            patch -p1 -d "$(dirname "$makefile")" -i "$patch_file" && \
-                echo "  $pkg_name: $msg"
-        else
-            echo "  $pkg_name: 补丁无需应用，跳过"
+    # luci-lib-docker: 去掉版本号 v 前缀（v0.3.4 → 0.3.4）
+    # 可能存在于 custom_feed 或 feeds/luci/libs
+    for dir in "$custom_feed_dir" "$BUILD_DIR/feeds/luci/libs"; do
+        makefile="$dir/luci-lib-docker/Makefile"
+        if [ -f "$makefile" ] && grep -q '^PKG_VERSION:=v' "$makefile"; then
+            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$makefile"
+            echo "  luci-lib-docker ($(basename "$dir")): 版本号前缀 v 已去除"
         fi
     done
+
+    # luci-app-store: 版本号分隔符 - 替换为 PKG_RELEASE（0.1.32-1 → 0.1.32 + PKG_RELEASE:=1）
+    makefile="$custom_feed_dir/luci-app-store/Makefile"
+    if [ -f "$makefile" ] && grep -q '^PKG_VERSION:=.*-1$' "$makefile"; then
+        sed -i 's/^PKG_VERSION:=\(.*\)-1$/PKG_VERSION:=\1/' "$makefile"
+        sed -i 's/^PKG_RELEASE:=$/PKG_RELEASE:=1/' "$makefile"
+        echo "  luci-app-store: 版本号分隔符 - 已替换为 PKG_RELEASE"
+    fi
 }
 
 fix_apk_file_conflicts() {

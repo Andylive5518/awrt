@@ -1,9 +1,0 @@
---- --- a/root/usr/share/luci/menu.d/luci-app-samba4.json	2026-06-08 14:31:36.654504365 +0800
-+++ +++ b/root/usr/share/luci/menu.d/luci-app-samba4.json	2026-06-08 14:32:27.373993293 +0800
-@@ -1,5 +1,5 @@
- {
--	"admin/nas/samba4": {
-+	"admin/services/samba4": {
- 		"title": "Network Shares",
- 		"action": {
- 			"type": "view",
