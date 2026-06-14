@@ -11,11 +11,9 @@ fix_default_set() {
     install -Dm544 "$BASE_PATH/patches/994_adguardhome-config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/994_adguardhome-config"
     install -Dm544 "$BASE_PATH/patches/995_pbr_isp_config" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/995_pbr_isp_config"
 
-    if [ -f "$BUILD_DIR/package/emortal/autocore/files/tempinfo" ]; then
-        if [ -f "$BASE_PATH/patches/tempinfo" ]; then
-            \cp -f "$BASE_PATH/patches/tempinfo" "$BUILD_DIR/package/emortal/autocore/files/tempinfo"
-        fi
-    fi
+    [ -f "$BUILD_DIR/package/emortal/autocore/files/tempinfo" ] || return 0
+    [ -f "$BASE_PATH/patches/tempinfo" ] || return 0
+    \cp -f "$BASE_PATH/patches/tempinfo" "$BUILD_DIR/package/emortal/autocore/files/tempinfo"
 }
 
 fix_miniupnpd() {
@@ -29,9 +27,8 @@ fix_miniupnpd() {
 
 fix_mk_def_depends() {
     sed -i 's/libustream-mbedtls/libustream-openssl/g' "$BUILD_DIR/include/target.mk" 2>/dev/null
-    if [ -f "$BUILD_DIR/target/linux/qualcommax/Makefile" ]; then
-        sed -i 's/wpad-openssl/wpad-mesh-openssl/g' "$BUILD_DIR/target/linux/qualcommax/Makefile"
-    fi
+    [ -f "$BUILD_DIR/target/linux/qualcommax/Makefile" ] || return 0
+    sed -i 's/wpad-openssl/wpad-mesh-openssl/g' "$BUILD_DIR/target/linux/qualcommax/Makefile"
 }
 
 change_dnsmasq2full() {
@@ -183,9 +180,8 @@ update_menu_location() {
 
 update_dnsmasq_conf() {
     local file="$BUILD_DIR/package/network/services/dnsmasq/files/dhcp.conf"
-    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
-        sed -i '/dns_redirect/d' "$file"
-    fi
+    [ -f "$file" ] || return 0
+    sed -i '/dns_redirect/d' "$file"
 }
 
 fix_quickstart() {
@@ -430,11 +426,9 @@ EOF
 
 remove_tweaked_packages() {
     local target_mk="$BUILD_DIR/include/target.mk"
-    if [ -f "$target_mk" ]; then
-        if grep -q "^DEFAULT_PACKAGES += \$(DEFAULT_PACKAGES.tweak)" "$target_mk"; then
-            sed -i 's/DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/# DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/g' "$target_mk"
-        fi
-    fi
+    [ -f "$target_mk" ] || return 0
+    grep -q "^DEFAULT_PACKAGES += \$(DEFAULT_PACKAGES.tweak)" "$target_mk" || return 0
+    sed -i 's/DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/# DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/g' "$target_mk"
 }
 
 enable_ttyd_autologin() {
@@ -483,9 +477,8 @@ fix_homeproxy_patches() {
 }
 
 fix_bandix_default_enabled() {
-    local dir="$BASE_PATH/patches"
     local cf_dir="$(get_custom_feed_source_dir)/openwrt-bandix"
-    local patch_file="$dir/011-bandix-default-enabled.patch"
+    local patch_file="$BASE_PATH/patches/011-bandix-default-enabled.patch"
     [ -f "$cf_dir/files/bandix.config" ] || return 0
     if patch --dry-run -p1 -d "$cf_dir" -i "$patch_file" >/dev/null 2>&1; then
         patch -p1 -d "$cf_dir" -i "$patch_file" && echo "[bandix] 默认启用"
@@ -495,7 +488,7 @@ fix_bandix_default_enabled() {
 
 
 fix_apk_package_versions() {
-    local custom_feed_dir pkg_name makefile
+    local custom_feed_dir makefile
 
     grep -q '^CONFIG_USE_APK=y' "$BASE_PATH"/deconfig/*.config 2>/dev/null || return 0
 
@@ -522,7 +515,7 @@ fix_apk_package_versions() {
 }
 
 fix_apk_file_conflicts() {
-    local custom_feed_dir pkg init_script
+    local custom_feed_dir init_script
 
     grep -q '^CONFIG_USE_APK=y' "$BASE_PATH"/deconfig/*.config 2>/dev/null || return 0
 
@@ -629,67 +622,54 @@ update_ath11k_fw() {
 
 update_nss_diag() {
     local file="$BUILD_DIR/package/kernel/mac80211/files/nss_diag.sh"
-    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
-        \rm -f "$file"
-        install -Dm755 "$BASE_PATH/patches/nss_diag.sh" "$file"
-    fi
+    [ -f "$file" ] || return 0
+    \rm -f "$file"
+    install -Dm755 "$BASE_PATH/patches/nss_diag.sh" "$file"
 }
 
 update_script_priority() {
-    local qca_drv_path="$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
-    if [ -d "${qca_drv_path%/*}" ] && [ -f "$qca_drv_path" ]; then
-        sed -i 's/START=.*/START=88/g' "$qca_drv_path"
-    fi
-
-    local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/qca-nss-pbuf.init"
-    if [ -d "${pbuf_path%/*}" ] && [ -f "$pbuf_path" ]; then
-        sed -i 's/START=.*/START=89/g' "$pbuf_path"
-    fi
-
-    local mosdns_path="$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns"
-    if [ -d "${mosdns_path%/*}" ] && [ -f "$mosdns_path" ]; then
-        sed -i 's/START=.*/START=94/g' "$mosdns_path"
-    fi
+    local path
+    for path in \
+        "$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init:88" \
+        "$BUILD_DIR/package/kernel/mac80211/files/qca-nss-pbuf.init:89" \
+        "$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns:94"; do
+        local file="${path%:*}" prio="${path##*:}"
+        [ -f "$file" ] && sed -i "s/START=.*/START=$prio/g" "$file"
+    done
 }
 
 update_mosdns_deconfig() {
     local mosdns_conf="$(get_custom_feed_worktree_dir)/luci-app-mosdns/root/etc/config/mosdns"
-    if [ -d "${mosdns_conf%/*}" ] && [ -f "$mosdns_conf" ]; then
-        sed -i 's/8000/300/g' "$mosdns_conf"
-        sed -i 's/5335/5336/g' "$mosdns_conf"
-    fi
+    [ -f "$mosdns_conf" ] || return 0
+    sed -i 's/8000/300/g' "$mosdns_conf"
+    sed -i 's/5335/5336/g' "$mosdns_conf"
 }
 
 update_geoip() {
     local geodata_path="$(get_custom_feed_package_dir)/v2ray-geodata/Makefile"
-    if [ -d "${geodata_path%/*}" ] && [ -f "$geodata_path" ]; then
-        local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' "$geodata_path" | grep -oE "[0-9]{1,}")
-        if [ -n "$GEOIP_VER" ]; then
-            local base_url="https://github.com/v2fly/geoip/releases/download/${GEOIP_VER}"
-            local old_SHA256
-            if ! old_SHA256=$(wget -qO- "$base_url/geoip.dat.sha256sum" | awk '{print $1}'); then
-                echo "错误：从 $base_url/geoip.dat.sha256sum 获取旧的 geoip.dat 校验和失败" >&2
-                return 1
-            fi
-            local new_SHA256
-            if ! new_SHA256=$(wget -qO- "$base_url/geoip-only-cn-private.dat.sha256sum" | awk '{print $1}'); then
-                echo "错误：从 $base_url/geoip-only-cn-private.dat.sha256sum 获取新的 geoip-only-cn-private.dat 校验和失败" >&2
-                return 1
-            fi
-            if [ -n "$old_SHA256" ] && [ -n "$new_SHA256" ]; then
-                if grep -q "$old_SHA256" "$geodata_path"; then
-                    sed -i "s|=geoip.dat|=geoip-only-cn-private.dat|g" "$geodata_path"
-                    sed -i "s/$old_SHA256/$new_SHA256/g" "$geodata_path"
-                fi
-            fi
-        fi
-    fi
+    [ -f "$geodata_path" ] || return 0
+
+    local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' "$geodata_path" | grep -oE "[0-9]{1,}")
+    [ -n "$GEOIP_VER" ] || return 0
+
+    local base_url="https://github.com/v2fly/geoip/releases/download/${GEOIP_VER}"
+    local old_SHA256 new_SHA256
+    old_SHA256=$(wget -qO- "$base_url/geoip.dat.sha256sum" 2>/dev/null | awk '{print $1}') || {
+        echo "错误：获取 geoip.dat 校验和失败" >&2; return 1
+    }
+    new_SHA256=$(wget -qO- "$base_url/geoip-only-cn-private.dat.sha256sum" 2>/dev/null | awk '{print $1}') || {
+        echo "错误：获取 geoip-only-cn-private.dat 校验和失败" >&2; return 1
+    }
+
+    [ -n "$old_SHA256" ] && [ -n "$new_SHA256" ] || return 0
+    grep -q "$old_SHA256" "$geodata_path" || return 0
+    sed -i "s|=geoip.dat|=geoip-only-cn-private.dat|g" "$geodata_path"
+    sed -i "s/$old_SHA256/$new_SHA256/g" "$geodata_path"
 }
 
 fix_rust_compile_error() {
-    if [ -f "$BUILD_DIR/feeds/packages/lang/rust/Makefile" ]; then
-        sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$BUILD_DIR/feeds/packages/lang/rust/Makefile"
-    fi
+    [ -f "$BUILD_DIR/feeds/packages/lang/rust/Makefile" ] || return 0
+    sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$BUILD_DIR/feeds/packages/lang/rust/Makefile"
 }
 
 fix_easytier_mk() {
@@ -724,21 +704,14 @@ update_nginx_ubus_module() {
 
 fix_opkg_check() {
     local patch_file="$BASE_PATH/patches/001-fix-provides-version-parsing.patch"
-    local opkg_dir="$BUILD_DIR/package/system/opkg"
-    if [ -f "$patch_file" ]; then
-        install -Dm644 "$patch_file" "$opkg_dir/patches/001-fix-provides-version-parsing.patch"
-    fi
+    [ -f "$patch_file" ] || return 0
+    install -Dm644 "$patch_file" "$BUILD_DIR/package/system/opkg/patches/001-fix-provides-version-parsing.patch"
 }
 
 update_uwsgi_limit_as() {
-    local cgi_io_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-cgi_io.ini"
-    local webui_ini="$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-webui.ini"
-
-    if [ -f "$cgi_io_ini" ]; then
-        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$cgi_io_ini"
-    fi
-
-    if [ -f "$webui_ini" ]; then
-        sed -i 's/^limit-as = .*/limit-as = 8192/g' "$webui_ini"
-    fi
+    local ini
+    for ini in "$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-cgi_io.ini" \
+               "$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-webui.ini"; do
+        [ -f "$ini" ] && sed -i 's/^limit-as = .*/limit-as = 8192/g' "$ini"
+    done
 }
