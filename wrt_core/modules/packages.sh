@@ -171,19 +171,19 @@ install_custom_feed() {
     local custom_feed_name
 
     local base_custom_feed_packages=(
-        xray-core xray-plugin dns2tcp dns2socks hysteria microsocks \
+        xray-core xray-plugin dns2socks hysteria microsocks \
         naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
         chinadns-ng ipt2socks tcping simple-obfs shadowsocksr-libev \
         v2dat luci-app-adguardhome ddns-go luci-app-iperf3-server \
         luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
-        luci-app-quickstart luci-app-istorex netdata luci-app-netdata \
+        luci-app-quickstart luci-app-istorex \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo \
         luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
-        luci-lib-docker luci-app-diskman smartdns luci-app-smartdns \
+        luci-app-diskman \
         luci-theme-argon luci-app-argon-config
     )
     local required_feed_dirs=(
@@ -315,9 +315,6 @@ update_smartdns() {
     local target_dir="$(get_custom_feed_worktree_dir)"
     local smartdns_dir="$target_dir/smartdns"
     local luci_app_dir="$target_dir/luci-app-smartdns"
-
-    [ -d "$smartdns_dir" ] || { echo "Warning: $smartdns_dir 不存在，跳过。" >&2; return 0; }
-    [ -d "$luci_app_dir" ] || { echo "Warning: $luci_app_dir 不存在，跳过。" >&2; return 0; }
 
     echo "正在更新 smartdns..."
     rm -rf "$smartdns_dir"
