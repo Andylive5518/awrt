@@ -156,7 +156,7 @@ set_build_signature() {
         echo "[build] signature already applied"
         return 0
     fi
-    sed -i "s|(luciversion || '')|(luciversion || '') + (' / build by Alex')|" "$target" && \
+    sed -i "s#(luciversion || '')#(luciversion || '') + (' / build by Alex')#" "$target" && \
         echo "[build] signature: build by Alex"
 }
 
