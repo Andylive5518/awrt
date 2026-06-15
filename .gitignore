@@ -1,8 +1,9 @@
-*.json
 .agents/
 .claude/
 .omc/
-*.md
 .reasonix/
 docs/
-.venv
+.venv/
+/*.json
+/*.md
+/build.log
