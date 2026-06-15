@@ -4,6 +4,6 @@
 .reasonix/
 docs/
 .venv/
-/*.json
-/*.md
-/build.log
+*.json
+*.md
+build.log
