@@ -495,14 +495,14 @@ fix_apk_package_versions() {
     echo "检测到 APK 包管理器，修复不兼容的版本号格式..."
     custom_feed_dir="$(get_custom_feed_source_dir 2>/dev/null)"
 
-    # luci-lib-docker: 去掉版本号 v 前缀（v0.3.4 → 0.3.4）
-    # 可能存在于 custom_feed 或 feeds/luci/libs
-    for dir in "$custom_feed_dir" "$BUILD_DIR/feeds/luci/libs"; do
-        makefile="$dir/luci-lib-docker/Makefile"
-        if [ -f "$makefile" ] && grep -q '^PKG_VERSION:=v' "$makefile"; then
-            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$makefile"
-            echo "  luci-lib-docker ($(basename "$dir")): 版本号前缀 v 已去除"
-        fi
+    # 扫描所有可能包含 Makefile 的目录，去掉版本号 v 前缀（v0.3.4 → 0.3.4）
+    # APK 不接受 v 前缀的版本号
+    for dir in "$custom_feed_dir" "$BUILD_DIR/feeds/luci/libs" "$BUILD_DIR/feeds/luci/applications"; do
+        [ -d "$dir" ] || continue
+        find "$dir" -maxdepth 2 -name Makefile -exec grep -l '^PKG_VERSION:=v' {} \; 2>/dev/null | while read -r mk; do
+            sed -i 's/^PKG_VERSION:=v/PKG_VERSION:=/' "$mk"
+            echo "  $(basename "$(dirname "$mk")"): 版本号前缀 v 已去除"
+        done
     done
 
     # luci-app-store: 版本号分隔符 - 替换为 PKG_RELEASE（0.1.32-1 → 0.1.32 + PKG_RELEASE:=1）
