@@ -122,7 +122,14 @@ class PackageManager:
             if not feeds_base.exists():
                 continue
 
-            for makefile in feeds_base.rglob("Makefile"):
+            # 使用 os.walk(followlinks=True) 而非 rglob，因为 package/feeds/
+            # 下的条目是符号链接，rglob 不遍历符号链接目录
+            for dirpath, _dirnames, filenames in os.walk(
+                str(feeds_base), followlinks=True,
+            ):
+                if "Makefile" not in filenames:
+                    continue
+                makefile = Path(dirpath) / "Makefile"
                 content = makefile.read_text()
                 lines = content.split("\n")
 

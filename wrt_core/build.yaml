@@ -348,6 +348,7 @@ steps:
   - apply_patches
   - system_config
   - docker_config
+  - remove_packages
   - feeds_install
   - remove_package_links
   - generate_config
