@@ -65,10 +65,10 @@ main() {
     fix_rust_compile_error
     update_smartdns
     patch_smartdns
-    update_dockerman
-    fix_dockerman_menu_order
-    fix_dockerman_events_timeout
-    fix_dockerman_rpc_events_timeout
+    # update_dockerman
+    # fix_dockerman_menu_order
+    # fix_dockerman_events_timeout
+    # fix_dockerman_rpc_events_timeout
     set_nginx_default_config
     update_uwsgi_limit_as
     update_nginx_ubus_module
@@ -84,8 +84,8 @@ main() {
     verify_custom_feed_installed_paths
     fix_apk_package_versions
     fix_apk_file_conflicts
-    docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
-    fix_docker_uc_stream_timeout "$BUILD_DIR"
+    # docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
+    # fix_docker_uc_stream_timeout "$BUILD_DIR"
     fix_cups_libcups_avahi_depends
     fix_easytier_lua
     update_script_priority
