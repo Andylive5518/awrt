@@ -169,6 +169,7 @@ install_custom_feed() {
     local custom_feed_worktree_dir
     local custom_feed_name
 
+    # 主包列表（默认来自 kiddin9/op-packages）
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2socks hysteria microsocks \
         naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
@@ -179,16 +180,16 @@ install_custom_feed() {
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo \
-        luci-app-fullconenat fullconenat luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
+        luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
-        luci-app-diskman \
-        luci-theme-argon luci-app-argon-config
+        luci-app-diskman luci-theme-argon luci-app-argon-config
     )
-    local required_feed_dirs=(
-        v2ray-core v2ray-geodata
-    )
+    # 以下包来自 kenzok8/jell（不在 kiddin9/op-packages 中）
+    local kenzok8_packages=(v2ray-core v2ray-geodata luci-app-fullconenat)
+
     local custom_feed_sources=()
+    local required_feed_dirs=()
     local missing_feed_dirs=()
     local source_entry
     local repo_label
@@ -204,10 +205,18 @@ install_custom_feed() {
         base_custom_feed_packages+=(fullconenat)
     fi
 
+    # 自动构建 feed 源列表
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
-        "kenzok8/jell|https://github.com/kenzok8/jell.git|main|v2ray-core v2ray-geodata"
     )
+    if [ ${#kenzok8_packages[@]} -gt 0 ]; then
+        custom_feed_sources+=(
+            "kenzok8/jell|https://github.com/kenzok8/jell.git|main|${kenzok8_packages[*]}"
+        )
+    fi
+
+    # 自动构建验证列表（所有包）
+    required_feed_dirs=("${base_custom_feed_packages[@]}" "${kenzok8_packages[@]}")
 
     feeds_path=$(get_feeds_path)
     custom_feed_name=$(get_custom_feed_name)
