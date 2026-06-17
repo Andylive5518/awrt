@@ -87,11 +87,6 @@ update_golang() {
         echo "错误：克隆 golang 仓库 $GOLANG_REPO 失败" >&2
         exit 1
     fi
-
-    # kiddin9 仓库的 Go 包硬编码了 feeds/packages/kiddin9/golang/golang-package.mk
-    # 创建符号链接让它们能找到
-    mkdir -p "$BUILD_DIR/feeds/packages/kiddin9"
-    ln -sfn "../../lang/golang" "$BUILD_DIR/feeds/packages/kiddin9/golang"
 }
 
 sync_sparse_packages_to_feed_dir() {
@@ -484,4 +479,16 @@ fix_netfilter_kmod_clash() {
     fi
 
     echo "kmod-iptables FILES 已清空，kmod-nf-ipt 将作为 ip_tables.ko / x_tables.ko 的唯一提供者"
+}
+
+# kiddin9 仓库的 Go 包硬编码了 feeds/packages/kiddin9/golang/golang-package.mk
+# 但 golang 实际安装在 feeds/packages/lang/golang/，修复路径引用
+fix_golang_package_path() {
+    local dir="$BUILD_DIR/package/feeds/custom_feed"
+    [ -d "$dir" ] || return 0
+
+    find "$dir" -maxdepth 2 -name Makefile -exec grep -l 'kiddin9/golang/golang-package.mk' {} \; 2>/dev/null | while read -r mk; do
+        sed -i 's|feeds/packages/kiddin9/golang/golang-package.mk|feeds/packages/lang/golang/golang-package.mk|g' "$mk"
+        echo "  golang path: $(basename "$(dirname "$mk")")"
+    done
 }
