@@ -170,10 +170,10 @@ update_menu_location() {
         echo "[menu] samba4: nas→services"
     fi
 
-    # bandix: network → status
+    # bandix: network → status（匹配所有子路径）
     json_file="$(get_custom_feed_source_dir)/luci-app-bandix/root/usr/share/luci/menu.d/luci-app-bandix.json"
-    if [ -f "$json_file" ] && grep -q '"admin/network/bandix"' "$json_file"; then
-        sed -i 's|"admin/network/bandix"|"admin/status/bandix"|' "$json_file"
+    if [ -f "$json_file" ] && grep -q '"admin/network/bandix' "$json_file"; then
+        sed -i 's|"admin/network/bandix|"admin/status/bandix|g' "$json_file"
         echo "[menu] bandix: network→status"
     fi
 }
