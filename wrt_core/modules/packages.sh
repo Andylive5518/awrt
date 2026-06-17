@@ -78,14 +78,20 @@ collect_missing_directories() {
 }
 
 update_golang() {
-    if [[ -d "$BUILD_DIR/feeds/packages/lang/golang" ]]; then
-        echo "正在更新 golang 软件包..."
-        \rm -rf "$BUILD_DIR/feeds/packages/lang/golang"
-        if ! git clone --depth 1 -b $GOLANG_BRANCH $GOLANG_REPO "$BUILD_DIR/feeds/packages/lang/golang"; then
-            echo "错误：克隆 golang 仓库 $GOLANG_REPO 失败" >&2
-            exit 1
-        fi
+    local golang_dir="$BUILD_DIR/feeds/packages/lang/golang"
+    [ -d "$golang_dir" ] || return 0
+
+    echo "正在更新 golang 软件包..."
+    \rm -rf "$golang_dir"
+    if ! git clone --depth 1 -b $GOLANG_BRANCH $GOLANG_REPO "$golang_dir"; then
+        echo "错误：克隆 golang 仓库 $GOLANG_REPO 失败" >&2
+        exit 1
     fi
+
+    # kiddin9 仓库的 Go 包硬编码了 feeds/packages/kiddin9/golang/golang-package.mk
+    # 创建符号链接让它们能找到
+    mkdir -p "$BUILD_DIR/feeds/packages/kiddin9"
+    ln -sfn "../../lang/golang" "$BUILD_DIR/feeds/packages/kiddin9/golang"
 }
 
 sync_sparse_packages_to_feed_dir() {
