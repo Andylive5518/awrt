@@ -88,6 +88,11 @@ main() {
     # docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
     # fix_docker_uc_stream_timeout "$BUILD_DIR"
     fix_cups_libcups_avahi_depends
+    install_printer_firmware
+    install_printer_ppd
+    install_printer_hotplug
+    install_airprint_services
+    fix_cups_airprint_config
     fix_easytier_lua
     update_script_priority
     update_geoip
