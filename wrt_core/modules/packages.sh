@@ -489,6 +489,7 @@ fix_golang_package_path() {
 
     find "$dir" -maxdepth 2 -name Makefile -exec grep -l 'kiddin9/golang/golang-package.mk' {} \; 2>/dev/null | while read -r mk; do
         sed -i 's|feeds/packages/kiddin9/golang/golang-package.mk|feeds/packages/lang/golang/golang-package.mk|g' "$mk"
+        sed -i 's|feeds/kiddin9/golang/golang-package.mk|feeds/packages/lang/golang/golang-package.mk|g' "$mk"
         echo "  golang path: $(basename "$(dirname "$mk")")"
     done
 }
