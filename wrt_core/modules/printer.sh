@@ -1,49 +1,48 @@
 #!/usr/bin/env bash
 
-# 启用 hplip 的 hpijs (foo2zjs) 打印驱动
-# 上游默认禁用了 hpijs，需要修改 Makefile 去掉禁用参数并添加 hpijs 子包
-fix_hplip_enable_hpijs() {
+# 启用 hplip 的 hpcups 打印驱动（HP 1020/P1106/M1136 共用）
+# 上游默认禁用了 hpcups，需要去掉 --disable-hpcups-install 和 --enable-lite-build
+fix_hplip_enable_hpcups() {
     local makefile
     for makefile in \
         "$BUILD_DIR/feeds/packages/utils/hplip/Makefile" \
         "$BUILD_DIR/package/feeds/packages/hplip/Makefile"; do
         [ -f "$makefile" ] && break
     done
-    [ -f "$makefile" ] || { echo "hplip Makefile 未找到，跳过 hpijs 启用"; return 0; }
+    [ -f "$makefile" ] || { echo "hplip Makefile 未找到，跳过 hpcups 启用"; return 0; }
 
-    if grep -q "hplip-hpijs" "$makefile"; then
-        echo "hplip: hpijs 已启用，跳过"
+    if grep -q "hplip-hpcups" "$makefile"; then
+        echo "hplip: hpcups 已启用，跳过"
         return 0
     fi
 
-    echo "正在启用 hplip hpijs 驱动支持..."
+    echo "正在启用 hplip hpcups 驱动支持..."
 
-    # 删除禁用 hpijs 的编译参数
-    for flag in hpijs-only-build hpcups-install hpps-install cups-drv-install lite-build; do
-        sed -i "/--disable-$flag/d" "$makefile"
-    done
+    # 去掉禁用 hpcups 的参数（lite-build 会阻止 hpcups 编译）
+    sed -i '/--disable-hpcups-install/d' "$makefile"
+    sed -i '/--enable-lite-build/d' "$makefile"
 
-    # 在 hplip-sane 的 endef 后添加 hpijs 子包
-    local hpijs_block
-    hpijs_block=$(mktemp)
-    cat > "$hpijs_block" <<'HPIJS'
-define Package/hplip-hpijs
+    # 在 hplip-sane 的 endef 后添加 hpcups 子包
+    local block
+    block=$(mktemp)
+    cat > "$block" <<'HPCUPS'
+define Package/hplip-hpcups
 $(call Package/hplip/Default)
-  TITLE+= (hpijs printer driver)
+  TITLE+= (hpcups printer driver)
   DEPENDS+=+hplip-common +libcups +cups
 endef
 
-define Package/hplip-hpijs/install
+define Package/hplip-hpcups/install
 	$(INSTALL_DIR) $(1)/usr/lib/cups/filter
-	$(CP) $(PKG_BUILD_DIR)/hpijs $(1)/usr/lib/cups/filter/
+	$(CP) $(PKG_BUILD_DIR)/prnt/hpcups/hpcups $(1)/usr/lib/cups/filter/
 endef
 
-$(eval $(call BuildPackage,hplip-hpijs))
-HPIJS
-    sed -i "/^\$(eval \$(call BuildPackage,hplip-sane))\$/r $hpijs_block" "$makefile"
-    rm -f "$hpijs_block"
+$(eval $(call BuildPackage,hplip-hpcups))
+HPCUPS
+    sed -i "/^\$(eval \$(call BuildPackage,hplip-sane))\$/r $block" "$makefile"
+    rm -f "$block"
 
-    echo "hplip: hpijs 驱动已启用"
+    echo "hplip: hpcups 驱动已启用"
 }
 
 # HP 1020/1106/M1136 打印机固件安装
