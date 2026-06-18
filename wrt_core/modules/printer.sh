@@ -1,5 +1,51 @@
 #!/usr/bin/env bash
 
+# 启用 hplip 的 hpijs (foo2zjs) 打印驱动
+# 上游默认禁用了 hpijs，需要修改 Makefile 去掉禁用参数并添加 hpijs 子包
+fix_hplip_enable_hpijs() {
+    local makefile
+    for makefile in \
+        "$BUILD_DIR/feeds/packages/utils/hplip/Makefile" \
+        "$BUILD_DIR/package/feeds/packages/hplip/Makefile"; do
+        [ -f "$makefile" ] && break
+    done
+    [ -f "$makefile" ] || { echo "hplip Makefile 未找到，跳过 hpijs 启用"; return 0; }
+
+    if grep -q "hplip-hpijs" "$makefile"; then
+        echo "hplip: hpijs 已启用，跳过"
+        return 0
+    fi
+
+    echo "正在启用 hplip hpijs 驱动支持..."
+
+    # 删除禁用 hpijs 的编译参数
+    for flag in hpijs-only-build hpcups-install hpps-install cups-drv-install lite-build; do
+        sed -i "/--disable-$flag/d" "$makefile"
+    done
+
+    # 在 hplip-sane 的 endef 后添加 hpijs 子包
+    local hpijs_block
+    hpijs_block=$(mktemp)
+    cat > "$hpijs_block" <<'HPIJS'
+define Package/hplip-hpijs
+$(call Package/hplip/Default)
+  TITLE+= (hpijs printer driver)
+  DEPENDS+=+hplip-common +libcups +cups
+endef
+
+define Package/hplip-hpijs/install
+	$(INSTALL_DIR) $(1)/usr/lib/cups/filter
+	$(CP) $(PKG_BUILD_DIR)/hpijs $(1)/usr/lib/cups/filter/
+endef
+
+$(eval $(call BuildPackage,hplip-hpijs))
+HPIJS
+    sed -i "/^\$(eval \$(call BuildPackage,hplip-sane))\$/r $hpijs_block" "$makefile"
+    rm -f "$hpijs_block"
+
+    echo "hplip: hpijs 驱动已启用"
+}
+
 # HP 1020/1106/M1136 打印机固件安装
 # 这些打印机是 GDI（主机依赖型），每次上电需要加载固件
 install_printer_firmware() {
@@ -102,7 +148,7 @@ install_airprint_services() {
     <txt-record>qtotal=1</txt-record>
     <txt-record>rp=printers/${model}</txt-record>
     <txt-record>ty=${model}</txt-record>
-    <txt-record>adminurl=http://$(hostname).local:631/printers/${model}</txt-record>
+    <txt-record>adminurl=http://\$(hostname).local:631/printers/${model}</txt-record>
     <txt-record>note=${model} on ImmortalWRT</txt-record>
     <txt-record>priority=0</txt-record>
     <txt-record>product=(${model})</txt-record>
