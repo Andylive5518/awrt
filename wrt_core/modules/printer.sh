@@ -22,6 +22,12 @@ fix_hplip_enable_hpcups() {
     sed -i '/--disable-hpcups-install/d' "$makefile"
     sed -i '/--disable-cups-drv-install/d' "$makefile"
 
+    # 安装 ImageProcessor 移除补丁（闭源二进制，无 aarch64 版本，仅用于 ljzjstream 打印机）
+    local patch_dir="$(dirname "$makefile")/patches"
+    mkdir -p "$patch_dir"
+    install -Dm644 "$BASE_PATH/patches/100-hplip-remove-imageprocessor.patch" \
+        "$patch_dir/100-hplip-remove-imageprocessor.patch"
+
     # 在 hplip-sane 的 endef 后添加 hpcups 子包
     local block
     block=$(mktemp)
