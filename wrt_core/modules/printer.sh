@@ -18,8 +18,9 @@ fix_hplip_enable_hpcups() {
 
     echo "正在启用 hplip hpcups 驱动支持..."
 
-    # 去掉禁用 hpcups 的参数（保留 lite-build，避免引入 Python 依赖）
+    # 去掉禁用 hpcups 和 cups-drv 的参数
     sed -i '/--disable-hpcups-install/d' "$makefile"
+    sed -i '/--disable-cups-drv-install/d' "$makefile"
 
     # 在 hplip-sane 的 endef 后添加 hpcups 子包
     local block
