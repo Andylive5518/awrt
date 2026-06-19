@@ -82,7 +82,6 @@ main() {
     fix_netfilter_kmod_clash
     install_feeds
     verify_custom_feed_installed_paths
-    fix_golang_package_path
     fix_apk_package_versions
     fix_apk_file_conflicts
     # docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
