@@ -176,9 +176,13 @@ jobs:
           fi
 
           # --- 打包 ---
-          echo "[2/4] 打包编译目录 ..."
+          echo "[2/4] 打包调试文件 ..."
           tar -czf /tmp/debug_build.tar.gz \
-            -C "${OPENWRT_PATH}" . 2>/dev/null
+            -C "${OPENWRT_PATH}" \
+            feeds/ custom_feed/ package/ \
+            include/ scripts/ config/ logs/ target/ toolchain/ tools/ \
+            rules.mk version version.date \
+            .config feeds.conf.default 2>/dev/null
           echo "  完成: $(du -h /tmp/debug_build.tar.gz | cut -f1)"
 
           # --- 上传 ---
