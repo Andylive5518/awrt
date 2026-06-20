@@ -141,7 +141,8 @@ jobs:
 
           cd "${OPENWRT_PATH}"
 
-          echo "[1/7] 创建 Release ..."
+          # --- 创建/获取 Release ---
+          echo "[1/4] 创建 Release ..."
 
           release_id=""
           get_resp=$(curl -s -w "\n%{http_code}" \
@@ -174,94 +175,45 @@ jobs:
             echo "  Release 创建成功，ID=${release_id}"
           fi
 
-          echo "[2/5] 打包 feeds/ + custom_feed/（全量）..."
-          mkdir -p build2025
-          rsync -a "feeds/" "build2025/feeds/" 2>/dev/null || true
-          if [ -d "custom_feed" ]; then
-            rsync -a "custom_feed/" "build2025/custom_feed/" 2>/dev/null || true
-          fi
-          tar -czf "/tmp/build2025_feeds.tar.gz" -C build2025/ feeds/ custom_feed/
-          echo "  完成: $(du -h /tmp/build2025_feeds.tar.gz | cut -f1)"
+          # --- 打包 ---
+          echo "[2/4] 打包编译目录 ..."
+          tar -czf /tmp/debug_build.tar.gz \
+            -C "${OPENWRT_PATH}" . 2>/dev/null
+          echo "  完成: $(du -h /tmp/debug_build.tar.gz | cut -f1)"
 
-          echo "[3/5] 打包 package/（全量）..."
-          rsync -a "package/" "build2025/package/" 2>/dev/null || true
-          tar -czf "/tmp/build2025_package.tar.gz" -C build2025/ package/
-          echo "  完成: $(du -h /tmp/build2025_package.tar.gz | cut -f1)"
-
-          echo "[4/5] 打包 .config + feeds.conf.default ..."
-          CONFIG_TMP_DIR="/tmp/build2025_config"
-          rm -rf "$CONFIG_TMP_DIR"
-          mkdir -p "$CONFIG_TMP_DIR"
-
-          CONFIG_FILE=""
-          for candidate in \
-            "./.config" \
-            "${OPENWRT_PATH}/.config" \
-            "${GITHUB_WORKSPACE}/action_build/.config"; do
-            if [ -f "$candidate" ]; then
-              CONFIG_FILE="$candidate"
-              break
-            fi
-          done
-
-          if [ -z "$CONFIG_FILE" ]; then
-            CONFIG_FILE=$(find "${OPENWRT_PATH}" -maxdepth 4 -name ".config" -type f 2>/dev/null | head -1)
-          fi
-
-          if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-            echo "  找到生成后的 .config: $CONFIG_FILE"
-            cp -f "$CONFIG_FILE" "$CONFIG_TMP_DIR/.config"
-            if [ -f "feeds.conf.default" ]; then
-              cp -f "feeds.conf.default" "$CONFIG_TMP_DIR/feeds.conf.default"
-            fi
-            tar -czf /tmp/build2025_config.tar.gz -C "$CONFIG_TMP_DIR" .
-            echo "  完成: $(du -h /tmp/build2025_config.tar.gz | cut -f1)"
-          else
-            echo "  [跳过] .config 未找到"
-          fi
-
-          echo "[5/5] 上传到 Release Assets ..."
-
+          # --- 上传 ---
           upload_asset() {
             local local_file="$1"
             local asset_name="$2"
 
-            if [ ! -f "$local_file" ]; then
-              echo "  [跳过] ${asset_name}：文件不存在"
-              return 0
-            fi
+            [ -f "$local_file" ] || { echo "  [跳过] ${asset_name}：文件不存在"; return 0; }
 
             local file_size
             file_size=$(stat -c%s "$local_file" 2>/dev/null || stat -f%z "$local_file" 2>/dev/null)
-            echo "  文件: ${asset_name} ($(du -h "$local_file" | cut -f1), ${file_size} bytes)"
+            echo "  上传 ${asset_name} ($(du -h "$local_file" | cut -f1)) ..."
 
             if [ "$file_size" -gt 2147483648 ]; then
               echo "  跳过 ${asset_name}：超过 GitHub 2GB 限制"
               return 0
             fi
 
+            # 删除旧 asset（如存在）
             existing_asset_id=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
               "https://api.github.com/repos/${UPLOAD_REPO}/releases/${release_id}/assets" \
-              | grep -o '"id":[0-9]*,"name":"'${asset_name}'"' \
+              | grep -o '"id":[0-9]*,"name":"'"${asset_name}"'"' \
               | grep -o '"id":[0-9]*' | sed 's/"id"://')
-
             if [ -n "$existing_asset_id" ]; then
-              echo "  删除旧 asset ID=${existing_asset_id} ..."
-              curl -s -w "%{http_code}" -X DELETE \
+              curl -s -X DELETE \
                 -H "Authorization: token ${GITHUB_TOKEN}" \
                 "https://api.github.com/repos/${UPLOAD_REPO}/releases/assets/${existing_asset_id}" \
-                | tail -n1
-              echo ""
+                >/dev/null
             fi
-
-            echo "  上传 ${asset_name} ..."
-            upload_url="https://uploads.github.com/repos/${UPLOAD_REPO}/releases/${release_id}/assets?name=${asset_name}"
 
             resp=$(curl -s -w "\n%{http_code}" -X POST \
               -H "Authorization: token ${GITHUB_TOKEN}" \
               -H "Content-Type: application/octet-stream" \
               --data-binary "@${local_file}" \
-              "$upload_url")
+              "https://uploads.github.com/repos/${UPLOAD_REPO}/releases/${release_id}/assets?name=${asset_name}")
 
             put_code=$(echo "$resp" | tail -n1)
             if [ "$put_code" = "200" ] || [ "$put_code" = "201" ]; then
@@ -272,15 +224,9 @@ jobs:
             fi
           }
 
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_feeds.tar.gz"   "feeds.tar.gz"
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_package.tar.gz"  "package.tar.gz"
-          echo "----------------------------------------"
-          upload_asset "/tmp/build2025_config.tar.gz"   ".config.tar.gz"
-          echo "----------------------------------------"
+          upload_asset "/tmp/debug_build.tar.gz"   "build.tar.gz"
 
-          rm -rf build2025 /tmp/build2025_*.tar.gz
+          rm -f /tmp/debug_build.tar.gz
 
           echo ""
           echo "============================================"
