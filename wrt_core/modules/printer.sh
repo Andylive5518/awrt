@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 启用 hplip 的 hpcups 打印驱动（HP 1020/P1106/M1136 共用）
-# 上游默认禁用了 hpcups，需要去掉 --disable-hpcups-install 和 --enable-lite-build
+# 上游默认禁用了 hpcups，需要去掉 --disable-hpcups-install
 fix_hplip_enable_hpcups() {
     local makefile
     for makefile in \
@@ -22,11 +22,23 @@ fix_hplip_enable_hpcups() {
     sed -i '/--disable-hpcups-install/d' "$makefile"
     sed -i '/--disable-cups-drv-install/d' "$makefile"
 
-    # 安装 ImageProcessor 移除补丁（闭源二进制，无 aarch64 版本，仅用于 ljzjstream 打印机）
-    local patch_dir="$(dirname "$makefile")/patches"
-    mkdir -p "$patch_dir"
-    install -Dm644 "$BASE_PATH/patches/100-hplip-remove-imageprocessor.patch" \
-        "$patch_dir/100-hplip-remove-imageprocessor.patch"
+    # 添加 Build/Prepare 钩子：源码解压后移除闭源 ImageProcessor
+    # （仅 x86 有 .so，aarch64 无，且仅用于 ljzjstream 打印机）
+    if ! grep -q "remove-imageprocessor" "$makefile"; then
+        cat >> "$makefile" <<'IMAGEPROCESSOR'
+
+# 移除闭源 ImageProcessor（仅 x86 架构有 .so 文件，仅用于 ljzjstream 打印机）
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	sed -i 's/-lImageProcessor //g' $(HOST_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(HOST_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(HOST_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	sed -i '/#include "ImageProcessor.h"/d' $(HOST_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
+	sed -i '/imageProcessor/d' $(HOST_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
+endef
+IMAGEPROCESSOR
+        echo "  ImageProcessor 移除钩子已添加"
+    fi
 
     # 在 hplip-sane 的 endef 后添加 hpcups 子包
     local block
