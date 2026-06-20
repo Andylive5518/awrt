@@ -74,12 +74,25 @@ class PackageManager:
             if not only_package_feeds:
                 paths.append(base_feeds / "packages" / pkg)
             paths.append(base_pkg_feeds / "packages" / pkg)
+            # custom_feed 路径（kiddin9/kenzok8 等自定义 feed 源）
+            if not only_package_feeds:
+                paths.append(self.build_dir / "custom_feed" / pkg)
+            paths.append(base_pkg_feeds / "custom_feed" / pkg)
             return paths
 
         for category in ("luci_apps", "net_packages", "utils"):
             for pkg in remove_config.get(category, []):
                 for path in search_paths(category, pkg):
                     if path.is_symlink() or path.exists():
+                        # 读取 PKG_NAME 并加入 removed_names，处理目录名与包名不一致的情况
+                        # 例如 open-app-filter 目录 → PKG_NAME=appfilter
+                        makefile = path / "Makefile"
+                        if makefile.exists():
+                            content = makefile.read_text()
+                            m = re.search(r'^PKG_NAME\s*:=\s*(\S+)', content, re.MULTILINE)
+                            if m and m.group(1) != pkg:
+                                removed_names.add(m.group(1))
+
                         if path.is_symlink():
                             path.unlink()
                         else:
@@ -98,10 +111,13 @@ class PackageManager:
 
     def _remove_orphaned_dependents(self, removed_names: set[str],
                                     only_package_feeds: bool = False) -> list[str]:
-        """扫描所有 feeds/package/feeds 中的 Makefile，删除依赖已删除包的包。
+        """扫描所有 feeds/package/feeds 中的 Makefile，递归删除依赖已删除包的包。
 
         提取所有 DEPENDS/BUILD_DEPENDS/PKG_BUILD_DEPENDS/LUCI_DEPENDS 行
         （含多行续行）中的包名，与已删除的包名集合做匹配。
+        同时提取 PKG_NAME 以处理目录名与包名不一致的情况（如 open-app-filter
+        目录的 PKG_NAME=appfilter）。
+        递归执行直到没有新的孤儿包被发现。
         """
         orphaned: list[str] = []
 
@@ -118,91 +134,113 @@ class PackageManager:
             "LUCI_DEPENDS:=", "LUCI_DEPENDS+=",
         )
 
-        for feeds_base in scan_dirs:
-            if not feeds_base.exists():
-                continue
+        # 将 removed_names 扩展为包含 PKG_NAME 的集合
+        # 例如 open-app-filter 目录 → PKG_NAME=appfilter
+        all_removed = set(removed_names)
 
-            # 使用 os.walk(followlinks=True) 而非 rglob，因为 package/feeds/
-            # 下的条目是符号链接，rglob 不遍历符号链接目录
+        def _collect_makefiles(feeds_base: Path) -> list[tuple[str, Path]]:
+            """收集所有 Makefile 路径，返回 (目录名, Makefile路径) 列表。"""
+            result: list[tuple[str, Path]] = []
             for dirpath, _dirnames, filenames in os.walk(
                 str(feeds_base), followlinks=True,
             ):
                 if "Makefile" not in filenames:
                     continue
                 makefile = Path(dirpath) / "Makefile"
-                content = makefile.read_text()
-                lines = content.split("\n")
+                result.append((makefile.parent.name, makefile))
+            return result
 
-                # 收集所有依赖声明行（可能含续行）
-                depends_blocks: list[str] = []
-                current_block = ""
-                in_depends = False
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith(depends_prefixes):
-                        # 遇到新的 DEPENDS 行，先保存上一个块
-                        if current_block:
-                            depends_blocks.append(current_block)
-                        current_block = stripped
-                        in_depends = True
-                    elif in_depends and stripped.endswith("\\"):
-                        current_block += " " + stripped.rstrip("\\").strip()
-                    elif in_depends:
-                        current_block += " " + stripped
+        def _extract_dep_names(content: str) -> set[str]:
+            """从 Makefile 内容中提取所有依赖包名。"""
+            lines = content.split("\n")
+            depends_blocks: list[str] = []
+            current_block = ""
+            in_depends = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith(depends_prefixes):
+                    if current_block:
                         depends_blocks.append(current_block)
-                        current_block = ""
-                        in_depends = False
-                if current_block:
+                    current_block = stripped
+                    in_depends = True
+                elif in_depends and stripped.endswith("\\"):
+                    current_block += " " + stripped.rstrip("\\").strip()
+                elif in_depends:
+                    current_block += " " + stripped
                     depends_blocks.append(current_block)
+                    current_block = ""
+                    in_depends = False
+            if current_block:
+                depends_blocks.append(current_block)
 
-                if not depends_blocks:
-                    continue
-
-                # 从所有依赖块中提取包名
-                dep_names: set[str] = set()
-                for block in depends_blocks:
-                    # 先处理条件依赖 +PACKAGE_X:Y → 取 Y
-                    # 再处理普通依赖 +pkg 或 pkg（无 + 前缀）
-                    # 匹配所有 +<name> 标记
-                    raw_deps = re.findall(r'\+([a-zA-Z0-9_./+-]+)', block)
-                    for dep in raw_deps:
-                        if ":" in dep:
-                            dep_names.add(dep.split(":", 1)[1])
-                        else:
-                            dep_names.add(dep)
-                    # 也匹配无 + 前缀的包名（如 DEPENDS:=cups）
-                    # 去掉赋值前缀后，按空白/换行分割
-                    no_prefix_deps = re.findall(
-                        r'(?:^|\s)([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)*)(?=\s|$)',
-                        block.split(":=", 1)[-1].split("+=", 1)[-1],
-                    )
-                    for dep in no_prefix_deps:
-                        if dep and not dep.startswith("+"):
-                            dep_names.add(dep)
-
-                matched = dep_names & removed_names
-                if not matched:
-                    continue
-
-                pkg_dir = makefile.parent
-                if pkg_dir == feeds_base:
-                    continue
-                if not (pkg_dir.is_symlink() or pkg_dir.exists()):
-                    continue
-
-                rel = pkg_dir.relative_to(feeds_base)
-                if str(rel).count("/") < 1:
-                    continue
-
-                if pkg_dir.is_symlink():
-                    pkg_dir.unlink()
-                else:
-                    shutil.rmtree(pkg_dir)
-                orphaned.append(pkg_dir.name)
-                self.logger.debug(
-                    f"自动清理孤儿包: {pkg_dir.name} "
-                    f"(依赖 {', '.join(sorted(matched))})"
+            dep_names: set[str] = set()
+            for block in depends_blocks:
+                raw_deps = re.findall(r'\+([a-zA-Z0-9_./+-]+)', block)
+                for dep in raw_deps:
+                    if ":" in dep:
+                        dep_names.add(dep.split(":", 1)[1])
+                    else:
+                        dep_names.add(dep)
+                no_prefix_deps = re.findall(
+                    r'(?:^|\s)([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)*)(?=\s|$)',
+                    block.split(":=", 1)[-1].split("+=", 1)[-1],
                 )
+                for dep in no_prefix_deps:
+                    if dep and not dep.startswith("+"):
+                        dep_names.add(dep)
+            return dep_names
+
+        def _extract_pkg_name(content: str) -> str | None:
+            """从 Makefile 内容中提取 PKG_NAME。"""
+            m = re.search(r'^PKG_NAME\s*:=\s*(\S+)', content, re.MULTILINE)
+            return m.group(1) if m else None
+
+        # 递归检测，直到没有新的孤儿包
+        while True:
+            new_orphans = 0
+            for feeds_base in scan_dirs:
+                if not feeds_base.exists():
+                    continue
+
+                makefiles = _collect_makefiles(feeds_base)
+                for dir_name, makefile in makefiles:
+                    if dir_name in all_removed:
+                        continue  # 已删除
+                    if not (makefile.parent.is_symlink() or makefile.parent.exists()):
+                        continue
+                    rel = makefile.parent.relative_to(feeds_base)
+                    if str(rel).count("/") < 1:
+                        continue
+
+                    content = makefile.read_text()
+                    dep_names = _extract_dep_names(content)
+
+                    # 检查依赖是否缺失：目录名或 PKG_NAME 在 all_removed 中
+                    matched = dep_names & all_removed
+                    if not matched:
+                        continue
+
+                    pkg_dir = makefile.parent
+                    if pkg_dir.is_symlink():
+                        pkg_dir.unlink()
+                    else:
+                        shutil.rmtree(pkg_dir)
+                    orphaned.append(dir_name)
+                    all_removed.add(dir_name)
+
+                    # 也加入 PKG_NAME 到 all_removed，让依赖此包的其他包能被检测到
+                    pkg_name = _extract_pkg_name(content)
+                    if pkg_name and pkg_name != dir_name:
+                        all_removed.add(pkg_name)
+
+                    new_orphans += 1
+                    self.logger.debug(
+                        f"自动清理孤儿包: {dir_name} "
+                        f"(依赖 {', '.join(sorted(matched))})"
+                    )
+
+            if new_orphans == 0:
+                break
 
         return orphaned
 
