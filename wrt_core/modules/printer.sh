@@ -22,14 +22,16 @@ fix_hplip_enable_hpcups() {
     sed -i '/--disable-hpcups-install/d' "$makefile"
     sed -i '/--disable-cups-drv-install/d' "$makefile"
 
-    # 添加 Build/Prepare 钩子：源码解压后移除闭源 ImageProcessor
-    # （仅 x86 有 .so，aarch64 无，且仅用于 ljzjstream 打印机）
+    # 在 include package.mk 之后插入 Build/Prepare 钩子
+    # （必须在 $(eval $(call BuildPackage,...)) 之前定义，否则不生效）
     if ! grep -q "remove-imageprocessor" "$makefile"; then
-        cat >> "$makefile" <<'IMAGEPROCESSOR'
+        local block
+        block=$(mktemp)
+        cat > "$block" <<'IMAGEPROCESSOR'
 
 # 移除闭源 ImageProcessor（仅 x86 架构有 .so 文件，仅用于 ljzjstream 打印机）
 define Build/Prepare
-	$(call Build/Prepare/Default)
+	$(Build/Prepare/Default)
 	sed -i 's/-lImageProcessor //g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
@@ -37,6 +39,8 @@ define Build/Prepare
 	sed -i '/imageProcessor/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
 endef
 IMAGEPROCESSOR
+        sed -i "/^include \$(INCLUDE_DIR)\/package.mk$/r $block" "$makefile"
+        rm -f "$block"
         echo "  ImageProcessor 移除钩子已添加"
     fi
 
