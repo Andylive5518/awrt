@@ -30,11 +30,11 @@ fix_hplip_enable_hpcups() {
 # 移除闭源 ImageProcessor（仅 x86 架构有 .so 文件，仅用于 ljzjstream 打印机）
 define Build/Prepare
 	$(call Build/Prepare/Default)
-	sed -i 's/-lImageProcessor //g' $(HOST_BUILD_DIR)/Makefile.am 2>/dev/null || true
-	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(HOST_BUILD_DIR)/Makefile.am 2>/dev/null || true
-	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(HOST_BUILD_DIR)/Makefile.am 2>/dev/null || true
-	sed -i '/#include "ImageProcessor.h"/d' $(HOST_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
-	sed -i '/imageProcessor/d' $(HOST_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
+	sed -i 's/-lImageProcessor //g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	sed -i '/#include "ImageProcessor.h"/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
+	sed -i '/imageProcessor/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
 endef
 IMAGEPROCESSOR
         echo "  ImageProcessor 移除钩子已添加"
@@ -63,33 +63,22 @@ HPCUPS
     echo "hplip: hpcups 驱动已启用"
 }
 
-# HP 1020/1106/M1136 打印机固件安装
-# 这些打印机是 GDI（主机依赖型），每次上电需要加载固件
-install_printer_firmware() {
-    local fw_dir="$BUILD_DIR/package/base-files/files/lib/firmware"
+# 安装打印机固件和 PPD 文件
+install_printer_files() {
     local src_dir="$BASE_PATH/patches/printer-firmware"
-
     [ -d "$src_dir" ] || return 0
 
-    echo "正在安装打印机固件..."
-    mkdir -p "$fw_dir"
+    local fw_dir="$BUILD_DIR/package/base-files/files/lib/firmware"
+    local ppd_dir="$BUILD_DIR/package/base-files/files/usr/share/cups/model"
+
+    echo "正在安装打印机固件和 PPD..."
+    mkdir -p "$fw_dir" "$ppd_dir"
 
     for fw in "$src_dir"/sihp*.dl; do
         [ -f "$fw" ] || continue
         install -Dm644 "$fw" "$fw_dir/$(basename "$fw")"
         echo "  固件: $(basename "$fw")"
     done
-}
-
-# 安装 PPD 文件到 CUPS
-install_printer_ppd() {
-    local ppd_dir="$BUILD_DIR/package/base-files/files/usr/share/cups/model"
-    local src_dir="$BASE_PATH/patches/printer-firmware"
-
-    [ -d "$src_dir" ] || return 0
-
-    echo "正在安装打印机 PPD..."
-    mkdir -p "$ppd_dir"
 
     for ppd in "$src_dir"/*.ppd; do
         [ -f "$ppd" ] || continue

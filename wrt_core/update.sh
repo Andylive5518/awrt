@@ -88,8 +88,7 @@ main() {
     # fix_docker_uc_stream_timeout "$BUILD_DIR"
     fix_cups_libcups_avahi_depends
     fix_hplip_enable_hpcups
-    install_printer_firmware
-    install_printer_ppd
+    install_printer_files
     install_printer_hotplug
     install_airprint_services
     fix_cups_airprint_config
