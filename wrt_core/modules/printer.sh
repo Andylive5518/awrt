@@ -29,14 +29,18 @@ fix_hplip_enable_hpcups() {
         block=$(mktemp)
         cat > "$block" <<'IMAGEPROCESSOR'
 
-# 移除闭源 ImageProcessor（仅 x86 架构有 .so 文件，仅用于 ljzjstream 打印机）
 define Build/Prepare
 	$(Build/Prepare/Default)
-	sed -i 's/-lImageProcessor //g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
-	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	# 编译 ImageProcessor 空实现 stub（闭源 .so 仅 x86 有，aarch64 无）
+	# 不改 HPCupsFilter.cpp 避免破坏 C++ 结构，用空 .a 满足链接器
+	cp $(TOPDIR)/../wrt_core/patches/printer-firmware/ImageProcessor_stub.c $(PKG_BUILD_DIR)/prnt/hpcups/ 2>/dev/null || true; \
+	$(TARGET_CC) $(TARGET_CFLAGS) -c $(PKG_BUILD_DIR)/prnt/hpcups/ImageProcessor_stub.c \
+		-o $(PKG_BUILD_DIR)/prnt/hpcups/ImageProcessor_stub.o 2>/dev/null || true; \
+	$(TARGET_AR) rcs $(PKG_BUILD_DIR)/prnt/hpcups/libImageProcessor.a \
+		$(PKG_BUILD_DIR)/prnt/hpcups/ImageProcessor_stub.o 2>/dev/null || true
+	# 移除 Makefile.am 中的闭源 .so 分发
+	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true; \
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
-	sed -i '/#include "ImageProcessor.h"/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
-	sed -i '/[iI]mageProcessor\|IMAGE_PROCESSOR\|IPE_SUCCESS/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
 endef
 IMAGEPROCESSOR
         sed -i "/^include \$(INCLUDE_DIR)\/package.mk$/r $block" "$makefile"
