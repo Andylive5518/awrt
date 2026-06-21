@@ -25,6 +25,10 @@ class PackageManager:
         self.base_path = base_path
         self.build_dir = build_dir
         self.logger = logger
+        # 缓存目录名 → PKG_NAME 映射，处理跨步骤的 broken symlink 场景
+        self._pkg_name_cache: dict[str, str] = {}
+        # 跨步骤累积已删除包名，确保孤儿检测能覆盖之前步骤的删除
+        self._accumulated_removed: set[str] = set()
 
     def remove_unwanted(self) -> bool:
         """从 feeds 和 package/feeds 中删除不需要的包。"""
@@ -74,10 +78,12 @@ class PackageManager:
             if not only_package_feeds:
                 paths.append(base_feeds / "packages" / pkg)
             paths.append(base_pkg_feeds / "packages" / pkg)
-            # custom_feed 路径（kiddin9/kenzok8 等自定义 feed 源）
-            if not only_package_feeds:
-                paths.append(self.build_dir / "custom_feed" / pkg)
-            paths.append(base_pkg_feeds / "custom_feed" / pkg)
+            # custom_feed 路径仅用于 net_packages 和 utils
+            # luci_apps 在 custom_feed 中有补丁需要保留（如 luci-theme-argon）
+            if category != "luci_apps":
+                if not only_package_feeds:
+                    paths.append(self.build_dir / "custom_feed" / pkg)
+                paths.append(base_pkg_feeds / "custom_feed" / pkg)
             return paths
 
         for category in ("luci_apps", "net_packages", "utils"):
@@ -92,6 +98,10 @@ class PackageManager:
                             m = re.search(r'^PKG_NAME\s*:=\s*(\S+)', content, re.MULTILINE)
                             if m and m.group(1) != pkg:
                                 removed_names.add(m.group(1))
+                                self._pkg_name_cache[pkg] = m.group(1)
+                        elif pkg in self._pkg_name_cache:
+                            # 跨步骤缓存：STEP 10 时 symlink 可能已 broken，从缓存读取
+                            removed_names.add(self._pkg_name_cache[pkg])
 
                         if path.is_symlink():
                             path.unlink()
@@ -102,10 +112,22 @@ class PackageManager:
 
         self.logger.ok(f"已移除 {total_removed} 个不需要的包目录")
 
+        # 累积已删除包名，供后续步骤的孤儿检测使用
+        self._accumulated_removed |= removed_names
+
         # 自动清理依赖已删除包的包
-        orphaned = self._remove_orphaned_dependents(removed_names, only_package_feeds)
-        if orphaned:
-            self.logger.ok(f"自动清理了 {len(orphaned)} 个因依赖缺失的孤儿包: {', '.join(orphaned)}")
+        # 仅在 custom_feed 已安装后执行：STEP 3 时 custom_feed 尚未安装，
+        # 此时某些包（如 luci-theme-argon）虽从 feeds 删除但会被 custom_feed 重新提供，
+        # 孤儿检测无法区分真缺失和将被重新提供的包。
+        custom_feed_dir = self.build_dir / "custom_feed"
+        if custom_feed_dir.exists():
+            orphaned = self._remove_orphaned_dependents(
+                self._accumulated_removed, only_package_feeds,
+            )
+            if orphaned:
+                self.logger.ok(f"自动清理了 {len(orphaned)} 个因依赖缺失的孤儿包: {', '.join(orphaned)}")
+                # 孤儿包名也加入累积集合，供后续递归
+                self._accumulated_removed |= set(orphaned)
 
         return True
 
@@ -118,6 +140,7 @@ class PackageManager:
         同时提取 PKG_NAME 以处理目录名与包名不一致的情况（如 open-app-filter
         目录的 PKG_NAME=appfilter）。
         递归执行直到没有新的孤儿包被发现。
+        注意：如果依赖的包在 custom_feed 中仍存在，则不视为缺失。
         """
         orphaned: list[str] = []
 
@@ -125,6 +148,9 @@ class PackageManager:
         if not only_package_feeds:
             scan_dirs.append(self.build_dir / "feeds")
         scan_dirs.append(self.build_dir / "package" / "feeds")
+
+        # 额外扫描 custom_feed 目录，用于判断依赖是否真正缺失
+        custom_feed_dir = self.build_dir / "custom_feed"
 
         # 所有需要扫描的依赖声明前缀
         depends_prefixes = (
@@ -149,6 +175,22 @@ class PackageManager:
                 makefile = Path(dirpath) / "Makefile"
                 result.append((makefile.parent.name, makefile))
             return result
+
+        def _collect_pkg_names(feeds_base: Path) -> set[str]:
+            """收集目录下所有包的 PKG_NAME 和目录名。"""
+            names: set[str] = set()
+            for dirpath, _dirnames, filenames in os.walk(
+                str(feeds_base), followlinks=True,
+            ):
+                if "Makefile" not in filenames:
+                    continue
+                makefile = Path(dirpath) / "Makefile"
+                names.add(makefile.parent.name)
+                content = makefile.read_text()
+                m = re.search(r'^PKG_NAME\s*:=\s*(\S+)', content, re.MULTILINE)
+                if m:
+                    names.add(m.group(1))
+            return names
 
         def _extract_dep_names(content: str) -> set[str]:
             """从 Makefile 内容中提取所有依赖包名。"""
@@ -196,6 +238,9 @@ class PackageManager:
             return m.group(1) if m else None
 
         # 递归检测，直到没有新的孤儿包
+        # 缓存 custom_feed 中的包名，避免每次候选都重新扫描
+        cf_names: set[str] | None = None
+
         while True:
             new_orphans = 0
             for feeds_base in scan_dirs:
@@ -215,9 +260,17 @@ class PackageManager:
                     content = makefile.read_text()
                     dep_names = _extract_dep_names(content)
 
-                    # 检查依赖是否缺失：目录名或 PKG_NAME 在 all_removed 中
-                    matched = dep_names & all_removed
-                    if not matched:
+                    # 检查依赖是否缺失：在 all_removed 中，且不在 custom_feed 中
+                    missing_deps = dep_names & all_removed
+                    if not missing_deps:
+                        continue
+
+                    # 如果 custom_feed 中仍有这些依赖，则不视为缺失
+                    if custom_feed_dir.exists():
+                        if cf_names is None:
+                            cf_names = _collect_pkg_names(custom_feed_dir)
+                        missing_deps = missing_deps - cf_names
+                    if not missing_deps:
                         continue
 
                     pkg_dir = makefile.parent
@@ -236,7 +289,7 @@ class PackageManager:
                     new_orphans += 1
                     self.logger.debug(
                         f"自动清理孤儿包: {dir_name} "
-                        f"(依赖 {', '.join(sorted(matched))})"
+                        f"(依赖 {', '.join(sorted(missing_deps))})"
                     )
 
             if new_orphans == 0:
