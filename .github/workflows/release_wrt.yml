@@ -177,13 +177,15 @@ jobs:
 
           # --- 打包 ---
           echo "[2/4] 打包调试文件 ..."
+          # 构建失败后部分目录可能不存在，用 --ignore-failed-read 跳过
           tar -czf /tmp/debug_build.tar.gz \
+            --ignore-failed-read \
             -C "${OPENWRT_PATH}" \
             feeds/ custom_feed/ package/ \
             include/ scripts/ config/ logs/ target/ toolchain/ tools/ \
             rules.mk version version.date \
-            .config feeds.conf.default 2>/dev/null
-          echo "  完成: $(du -h /tmp/debug_build.tar.gz | cut -f1)"
+            .config feeds.conf.default 2>/dev/null || true
+          echo "  完成: $(du -h /tmp/debug_build.tar.gz 2>/dev/null | cut -f1)"
 
           # --- 上传 ---
           upload_asset() {

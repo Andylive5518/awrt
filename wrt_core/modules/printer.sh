@@ -36,7 +36,7 @@ define Build/Prepare
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
 	sed -i '/#include "ImageProcessor.h"/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
-	sed -i '/imageProcessor/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
+	sed -i '/[iI]mageProcessor\|IMAGE_PROCESSOR\|IPE_SUCCESS/d' $(PKG_BUILD_DIR)/prnt/hpcups/HPCupsFilter.cpp 2>/dev/null || true
 endef
 IMAGEPROCESSOR
         sed -i "/^include \$(INCLUDE_DIR)\/package.mk$/r $block" "$makefile"
