@@ -60,7 +60,7 @@ endef
 
 define Package/hplip-hpcups/install
 	$(INSTALL_DIR) $(1)/usr/lib/cups/filter
-	$(CP) $(PKG_BUILD_DIR)/.libs/hpcups $(1)/usr/lib/cups/filter/
+	$(CP) $(PKG_BUILD_DIR)/hpcups $(1)/usr/lib/cups/filter/
 endef
 
 $(eval $(call BuildPackage,hplip-hpcups))
