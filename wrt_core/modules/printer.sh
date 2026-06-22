@@ -180,7 +180,8 @@ AIRPRINT
 
 # 修复 CUPS 配置以支持 AirPrint 和网络共享
 fix_cups_airprint_config() {
-    local cupsd_conf="$BUILD_DIR/package/base-files/files/etc/cups/cupsd.conf"
+    # 写到 files/ 根目录（OpenWrt 镜像叠加层），不归任何包所有，避免与 cups 包冲突
+    local cupsd_conf="$BUILD_DIR/files/etc/cups/cupsd.conf"
 
     echo "正在配置 CUPS AirPrint 支持..."
     mkdir -p "$(dirname "$cupsd_conf")"
