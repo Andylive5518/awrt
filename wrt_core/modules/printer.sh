@@ -55,7 +55,7 @@ IMAGEPROCESSOR
 define Package/hplip-hpcups
 $(call Package/hplip/Default)
   TITLE+= (hpcups printer driver)
-  DEPENDS+=+hplip-common +libcups +cups
+  DEPENDS+=+hplip-common +libcups +libcupsimage +cups
 endef
 
 define Package/hplip-hpcups/install
