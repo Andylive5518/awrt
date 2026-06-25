@@ -41,6 +41,7 @@ main() {
     update_feeds
     remove_unwanted_packages
     install_custom_feed
+    fix_xray_allowinsecure_patch
     fix_homeproxy_patches
     fix_default_set
     fix_miniupnpd

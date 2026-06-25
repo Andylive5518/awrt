@@ -485,3 +485,47 @@ fix_netfilter_kmod_clash() {
 
     echo "kmod-iptables FILES 已清空，kmod-nf-ipt 将作为 ip_tables.ko / x_tables.ko 的唯一提供者"
 }
+
+# xray-core v26.6.22 起 AllowInsecure 直接返回 PrintRemovedFeatureError（无时间门控），
+# 旧的 AllowInsecure.patch 行号不匹配导致两个 hunk 全部失败。
+# 此函数根据当前版本源码重新生成补丁。
+# 注意：此函数在 install_custom_feed 之后调用，此时只有 Makefile 和 patches/，
+# 源码文件（transport_internet.go）要到编译阶段才下载，因此不能依赖读取源码。
+fix_xray_allowinsecure_patch() {
+    local xray_dir
+    local patch_file
+    local custom_feed_dir
+
+    custom_feed_dir=$(get_custom_feed_source_dir)
+    xray_dir="$custom_feed_dir/xray-core"
+    patch_file="$xray_dir/patches/AllowInsecure.patch"
+
+    [ -d "$xray_dir" ] || return 0
+    [ -f "$patch_file" ] || return 0
+
+    echo "正在更新 xray-core AllowInsecure.patch 以适配当前源码..."
+
+    # 检查是否已经是正确的补丁（直接设置 config.AllowInsecure = true 而非报错）
+    if grep -q 'config.AllowInsecure = true' "$patch_file" && ! grep -q 'PrintRemovedFeatureError' "$patch_file"; then
+        echo "AllowInsecure.patch 已是最新版本，无需更新"
+        return 0
+    fi
+
+    # 重新生成补丁：将 AllowInsecure 块替换为直接设置 config.AllowInsecure = true
+    # v26.6.22 源码中 AllowInsecure 块在 ~733 行，不再 import "time"
+    cat > "$patch_file" << 'PATCH_EOF'
+--- a/infra/conf/transport_internet.go
++++ b/infra/conf/transport_internet.go
+@@ -731,8 +731,8 @@ func (c *TLSConfig) Build() (proto.Message, error) {
+ 	config.MasterKeyLog = c.MasterKeyLog
+ 
+ 	if c.AllowInsecure {
+-		return nil, errors.PrintRemovedFeatureError(`"allowInsecure"`, `"pinnedPeerCertSha256"(pcs) and "verifyPeerCertByName"(vcn)`)
++		config.AllowInsecure = true
+ 	}
+ 	if c.PinnedPeerCertSha256 != "" {
+ 		for v := range strings.SplitSeq(c.PinnedPeerCertSha256, ",") {
+PATCH_EOF
+
+    echo "AllowInsecure.patch 已更新：移除 PrintRemovedFeatureError，改为直接设置 config.AllowInsecure = true"
+}
