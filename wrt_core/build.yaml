@@ -1,4 +1,4 @@
-# ============================================
+﻿# ============================================
 # ImmortalWrt x86_64 固件构建配置
 # 这是唯一需要手动编辑的配置文件
 # ============================================
@@ -54,7 +54,6 @@ packages:
       - luci-app-adguardhome
       - luci-app-diskman
       - luci-app-argon-config
-      - luci-theme-argon
       - luci-app-cpufreq
       - luci-app-docker
       - luci-app-dockerman
@@ -182,8 +181,8 @@ feeds:
         - luci-lib-docker
         - luci-app-dockerman
         - luci-app-diskman
-        - luci-theme-argon
         - luci-app-argon-config
+        - luci-theme-argon
 
     - label: kenzok8/jell
       url: https://github.com/kenzok8/jell.git
