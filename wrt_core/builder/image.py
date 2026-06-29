@@ -21,6 +21,51 @@ class ImageManager:
         self.build_dir = build_dir
         self.logger = logger
 
+    def generate_config(self) -> bool:
+        """Generate OpenWrt .config and run defconfig to resolve defaults.
+
+        make download requires .config. If .config is missing, OpenWrt's
+        top-level Makefile falls back to menuconfig; CI has no interactive
+        terminal and fails with "Error opening terminal: unknown.".
+        """
+        kernel_config = self.config.kernel_config
+        config_paths = []
+
+        if kernel_config.base:
+            config_paths.append(self.base_path / kernel_config.base)
+        config_paths.extend(self.base_path / fragment for fragment in kernel_config.fragments)
+
+        if not config_paths:
+            self.logger.fail("kernel_config.base or fragments is required to generate .config")
+            return False
+
+        missing = [str(path) for path in config_paths if not path.exists()]
+        if missing:
+            self.logger.fail(f"Missing config fragments: {', '.join(missing)}")
+            return False
+
+        target_config = self.build_dir / ".config"
+        with target_config.open("w", encoding="utf-8", newline="\n") as out:
+            for path in config_paths:
+                content = path.read_text(encoding="utf-8")
+                out.write(content)
+                if content and not content.endswith("\n"):
+                    out.write("\n")
+
+        env = os.environ.copy()
+        env.setdefault("TERM", "xterm")
+
+        result = subprocess.run(
+            ["make", "defconfig"],
+            cwd=str(self.build_dir), capture_output=True, text=True, env=env,
+        )
+        if result.returncode != 0:
+            self.logger.fail(f"make defconfig failed: {(result.stderr or result.stdout)[:5000]}")
+            return False
+
+        self.logger.ok(".config generated")
+        return True
+
     def make_download(self, jobs: int = 0) -> bool:
         """执行 make download。"""
         jobs = jobs or self._detect_jobs()

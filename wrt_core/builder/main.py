@@ -149,7 +149,7 @@ def main():
             ) if not args.upgrade_check else True,
             "system_config": system.configure,
             "docker_config": docker.configure,
-            "generate_config": lambda: True,  # TODO: Phase 2
+            "generate_config": image.generate_config,
             "make_download": image.make_download,
             "make_build": image.make_build,
             "package_output": image.package_output,
