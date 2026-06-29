@@ -104,28 +104,26 @@ _docker_stack_update_dockerd_depends_block() {
             in_depends = 0
             replaced = 0
         }
-        /^[[:space:]]*DEPENDS:=\$\((GO_)?ARCH_DEPENDS\) \\$/ {
+        /^  DEPENDS:=\$\(ARCH_DEPENDS\) \\$/ {
             in_depends = 1
             replaced = 1
-            has_go = ($0 ~ /GO_ARCH_DEPENDS/)
 
-            if (has_go)
-                print "  DEPENDS:=$(GO_ARCH_DEPENDS) \\"
-            else
-                print "  DEPENDS:=$(ARCH_DEPENDS) \\"
-            print "  +ca-certificates \\"
-            print "  +containerd \\"
-            print "  +iptables-nft \\"
-            print "  +IPV6:ip6tables-nft \\"
-            print "  +IPV6:kmod-nf-nat6 \\"
-            print "  +KERNEL_SECCOMP:libseccomp \\"
-            print "  +kmod-br-netfilter \\"
-            print "  +kmod-nf-ipvs \\"
-            print "  +kmod-veth \\"
-            print "  +nftables \\"
-            print "  +kmod-nft-nat \\"
-            print "  +tini \\"
-            print "  +uci-firewall"
+            print "  DEPENDS:=$(ARCH_DEPENDS) \\"
+            print "    +ca-certificates \\"
+            print "    +containerd \\"
+            print "    +iptables-nft \\"
+            print "    +iptables-mod-extra \\"
+            print "    +IPV6:ip6tables-nft \\"
+            print "    +IPV6:kmod-ipt-nat6 \\"
+            print "    +KERNEL_SECCOMP:libseccomp \\"
+            print "    +kmod-ipt-nat \\"
+            print "    +kmod-ipt-physdev \\"
+            print "    +kmod-nf-ipvs \\"
+            print "    +kmod-veth \\"
+            print "    +nftables \\"
+            print "    +kmod-nft-nat \\"
+            print "    +tini \\"
+            print "    +uci-firewall"
             next
         }
         in_depends {
@@ -362,7 +360,6 @@ _docker_stack_init_supports_nftables_backend() {
         && grep -Fq 'verify_nftables_swarm_is_disabled "${data_root}" || return 1' "$dockerd_init" \
         && grep -Fq 'verify_nftables_forwarding || return 1' "$dockerd_init" \
         && grep -Fq 'verify_nftables_prerequisites "${data_root}" || return 1' "$dockerd_init" \
-        && grep -Fq 'ensure_docker_nftables_nat' "$dockerd_init" \
         && grep -Fq 'nft add rule inet "${NFT_DOCKER_USER_TABLE}" "${NFT_DOCKER_USER_CHAIN}" iifname "${inbound}" oifname "${outbound}" reject' "$dockerd_init"
 }
 
@@ -451,7 +448,6 @@ _docker_stack_patch_nft_prereq_block() {
                 print "\tverify_nftables_forwarding || return 1"
                 print "}"
                 print ""
-                print "ensure_docker_nftables_nat() {"
                 print "\t# 验证 nftables 基础可用性。Docker nftables backend"
                 print "\t# 自行管理 NAT 规则，此处仅做基础检查。"
                 print "\tnft --version >/dev/null 2>&1 || {"
@@ -521,7 +517,6 @@ _docker_stack_patch_process_config_nftables() {
                     print "\tesac"
                     print "\tif [ \"${firewall_backend}\" = \"nftables\" ]; then"
                     print "\t\tverify_nftables_prerequisites \"${data_root}\" || return 1"
-                    print "\t\tensure_docker_nftables_nat || return 1"
                     print "\tfi"
                     print "\tconfig_get_bool iptables globals iptables \"1\""
                     print "\tconfig_get_bool ip6tables globals ip6tables \"0\""
@@ -873,23 +868,6 @@ docker_stack_sync_nftables_compat() {
 
     build_dir=$(_docker_stack_normalize_build_dir "$build_dir")
 
-    # kernel 6.6（ImmortalWrt 24.10）上 iptables-legacy 和 nftables 和平共存，
-    # 官方 dockerd 依赖 kmod-ipt-nat / iptables-mod-extra 全家桶，正常工作。
-    # nftables 迁移方案（替换 DEPENDS + 修改 init 脚本）仅 kernel 6.18+ 需要。
-    # 内核版本从 include/kernel-X.Y 文件中提取 LINUX_VERSION-X.Y 行，格式固定：
-    #   LINUX_VERSION-6.6 = .133   → 版本 6.6
-    #   LINUX_VERSION-6.18 = .xxx  → 版本 6.18
-    local kv
-    kv=$(sed -n 's/^LINUX_VERSION-\([0-9]\+\.[0-9]\+\).*/\1/p' "$build_dir"/include/kernel-* 2>/dev/null | head -1)
-    if [ -n "$kv" ]; then
-        local kmajor=${kv%%.*}
-        local kminor=${kv#*.}
-        if [ "$kmajor" -lt 6 ] || { [ "$kmajor" -eq 6 ] && [ "${kminor:-0}" -lt 12 ]; }; then
-            echo "kernel $kv < 6.12 — 跳过了 nftables 迁移，保留官方 iptables-legacy 依赖"
-            return 0
-        fi
-    fi
-
     dockerd_makefile=$(_docker_stack_resolve_component_makefile "$build_dir" "dockerd") || return 1
     dockerd_config=$(_docker_stack_resolve_dockerd_file "$build_dir" "files/etc/config/dockerd") || return 1
     dockerd_init=$(_docker_stack_resolve_dockerd_file "$build_dir" "files/dockerd.init") || return 1
@@ -964,36 +942,3 @@ docker_stack_sync_nftables_compat() {
 
 # 验证 docker.uc stream_response_chunks 已被 996-dockerman-events-timeout.patch 修复
 # 996 patch 将阻塞 recv 改为 socket.poll 循环，无硬编码总 deadline，由 uhttpd script_timeout 兜底
-fix_docker_uc_stream_timeout() {
-    local build_dir="$1"
-    local uc_file=""
-
-    [ -n "$build_dir" ] || {
-        echo "错误：fix_docker_uc_stream_timeout 缺少 build_dir 参数" >&2
-        return 1
-    }
-
-    build_dir=$(_docker_stack_normalize_build_dir "$build_dir")
-
-    for candidate in \
-        "$build_dir/feeds/luci/applications/luci-app-dockerman/ucode/controller/docker.uc" \
-        "$build_dir/package/feeds/luci/luci-app-dockerman/usr/share/ucode/luci/controller/docker.uc" \
-        "$build_dir/usr/share/ucode/luci/controller/docker.uc"; do
-        [ -f "$candidate" ] && { uc_file="$candidate"; break; }
-    done
-
-    [ -n "$uc_file" ] || {
-        echo "docker.uc 控制器未找到，跳过验证"
-        return 0
-    }
-
-    # 996 patch 正确修复的特征：有 socket.poll 但无 deadline
-    if grep -q 'socket.poll' "$uc_file" 2>/dev/null \
-        && ! grep -q "deadline = time()" "$uc_file" 2>/dev/null; then
-        echo "docker.uc stream_response_chunks 已正确修复（poll+无deadline）"
-        return 0
-    fi
-
-    echo "警告：docker.uc stream_response_chunks 未按预期修复，请检查 996 patch 是否应用成功" >&2
-    return 1
-}

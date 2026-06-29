@@ -617,6 +617,9 @@ update_ath11k_fw() {
     fi
 
     mv -f "$tmp_mk" "$makefile"
+    if [ -f "$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk" ]; then
+        sed -i 's/ath11k-firmware-ipq6018\([^-[:alnum:]_]\|\$\)/ath11k-firmware-ipq6018-ddwrt\1/g' "$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk"
+    fi
     rm -f "$tmp_mk"
 }
 
@@ -714,4 +717,44 @@ update_uwsgi_limit_as() {
                "$BUILD_DIR/feeds/packages/net/uwsgi/files-luci-support/luci-webui.ini"; do
         [ -f "$ini" ] && sed -i 's/^limit-as = .*/limit-as = 8192/g' "$ini"
     done
+}
+
+fix_mkpkg_format_invalid() {
+    local custom_feed_worktree_dir
+    custom_feed_worktree_dir=$(get_custom_feed_worktree_dir)
+
+    if [[ $BUILD_DIR =~ "imm-nss" ]]; then
+        if [ -f "$custom_feed_worktree_dir/v2ray-geodata/Makefile" ]; then
+            sed -i 's/VER)-$(PKG_RELEASE)/VER)-r$(PKG_RELEASE)/g' "$custom_feed_worktree_dir/v2ray-geodata/Makefile"
+        fi
+        if [ -f "$custom_feed_worktree_dir/luci-lib-taskd/Makefile" ]; then
+            sed -i 's/>=1\.0\.3-1/>=1\.0\.3-r1/g' "$custom_feed_worktree_dir/luci-lib-taskd/Makefile"
+        fi
+        if [ -f "$custom_feed_worktree_dir/luci-app-openclash/Makefile" ]; then
+            sed -i 's/PKG_RELEASE:=beta/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-openclash/Makefile"
+        fi
+        if [ -f "$custom_feed_worktree_dir/luci-app-quickstart/Makefile" ]; then
+            sed -i 's/PKG_VERSION:=0\.8\.16-1/PKG_VERSION:=0\.8\.16/g' "$custom_feed_worktree_dir/luci-app-quickstart/Makefile"
+            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-quickstart/Makefile"
+        fi
+        if [ -f "$custom_feed_worktree_dir/luci-app-store/Makefile" ]; then
+            sed -i 's/PKG_VERSION:=0\.1\.27-1/PKG_VERSION:=0\.1\.27/g' "$custom_feed_worktree_dir/luci-app-store/Makefile"
+            sed -i 's/PKG_RELEASE:=$/PKG_RELEASE:=1/g' "$custom_feed_worktree_dir/luci-app-store/Makefile"
+        fi
+    fi
+}
+
+update_nss_pbuf_performance() {
+    local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/pbuf.uci"
+    if [ -d "$(dirname "$pbuf_path")" ] && [ -f $pbuf_path ]; then
+        sed -i "s/auto_scale '1'/auto_scale 'off'/g" $pbuf_path
+        sed -i "s/scaling_governor 'performance'/scaling_governor 'schedutil'/g" $pbuf_path
+    fi
+}
+
+fix_compile_coremark() {
+    local file="$BUILD_DIR/feeds/packages/utils/coremark/Makefile"
+    if [ -d "$(dirname "$file")" ] && [ -f "$file" ]; then
+        sed -i 's/mkdir \$/mkdir -p \$/g' "$file"
+    fi
 }

@@ -24,11 +24,11 @@ remove_unwanted_packages() {
         "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome" "luci-app-diskman"
         "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker"
         "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
-        "luci-app-autoreboot" "luci-app-microsocks" "luci-app-smartdns"
+        "luci-app-autoreboot" "luci-app-microsocks"
     )
     local packages_net=(
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
-        "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust" "smartdns"
+        "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust"
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
         "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
@@ -188,7 +188,7 @@ install_custom_feed() {
         msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo \
         luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
-        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
+        luci-app-passwall luci-app-passwall2 mihomo-meta openwrt-bandix luci-app-bandix luci-app-quickfile \
         luci-app-diskman luci-theme-argon luci-app-argon-config
     )
     # 以下包来自 kenzok8/jell（不在 kiddin9/op-packages 中）
@@ -326,40 +326,29 @@ add_ax6600_led() {
 }
 
 update_smartdns() {
-    local target_dir="$(get_custom_feed_worktree_dir)"
-    local smartdns_dir="$target_dir/smartdns"
-    local luci_app_dir="$target_dir/luci-app-smartdns"
+    local SMARTDNS_REPO="https://github.com/ZqinKing/openwrt-smartdns.git"
+    local SMARTDNS_DIR="$BUILD_DIR/feeds/packages/net/smartdns"
+    local LUCI_APP_SMARTDNS_REPO="https://github.com/pymumu/luci-app-smartdns.git"
+    local LUCI_APP_SMARTDNS_DIR="$BUILD_DIR/feeds/luci/applications/luci-app-smartdns"
 
     echo "正在更新 smartdns..."
-    rm -rf "$smartdns_dir"
-    git clone --depth=1 "https://github.com/ZqinKing/openwrt-smartdns.git" "$smartdns_dir" || {
-        echo "错误：克隆 smartdns 仓库失败" >&2
-        return 1
-    }
+    rm -rf "$SMARTDNS_DIR"
+    if ! git clone --depth=1 "$SMARTDNS_REPO" "$SMARTDNS_DIR"; then
+        echo "错误：从 $SMARTDNS_REPO 克隆 smartdns 仓库失败" >&2
+        exit 1
+    fi
 
-    echo "正在更新 luci-app-smartdns..."
-    rm -rf "$luci_app_dir"
-    git clone --depth=1 "https://github.com/pymumu/luci-app-smartdns.git" "$luci_app_dir" || {
-        echo "错误：克隆 luci-app-smartdns 仓库失败" >&2
-        return 1
-    }
-
-    echo "smartdns 更新完成。"
-}
-
-patch_smartdns() {
-    local SMARTDNS_DIR="$(get_custom_feed_worktree_dir)/smartdns"
-
-    echo "正在给 smartdns 打补丁..."
     install -Dm644 "$BASE_PATH/patches/100-smartdns-optimize.patch" "$SMARTDNS_DIR/patches/100-smartdns-optimize.patch"
     sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
-    # The upstream Makefile is written for the packages feed and includes
-    # ../../lang/rust/rust-package.mk. Inside custom_feed that path resolves
-    # to feeds/lang/rust/... which does not exist, so collecting feed metadata
-    # fails with "No such file or directory" / "No rule to make target".
-    # Repoint it to the packages feed copy (feeds/packages/lang/rust/...).
-    sed -i 's#include ../../lang/rust/rust-package.mk#include ../../packages/lang/rust/rust-package.mk#g' "$SMARTDNS_DIR/Makefile"
+
+    echo "正在更新 luci-app-smartdns..."
+    rm -rf "$LUCI_APP_SMARTDNS_DIR"
+    if ! git clone --depth=1 "$LUCI_APP_SMARTDNS_REPO" "$LUCI_APP_SMARTDNS_DIR"; then
+        echo "错误：从 $LUCI_APP_SMARTDNS_REPO 克隆 luci-app-smartdns 仓库失败" >&2
+        exit 1
+    fi
 }
+
 
 _sync_luci_lib_docker() {
     local lib_path="$BUILD_DIR/feeds/luci/libs/luci-lib-docker"
