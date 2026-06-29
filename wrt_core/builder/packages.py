@@ -1,4 +1,4 @@
-"""包管理。
+﻿"""包管理。
 
 从 build.yaml 配置中读取包列表，执行：
 - 从 feeds 中删除不需要的包
@@ -78,13 +78,11 @@ class PackageManager:
             if not only_package_feeds:
                 paths.append(base_feeds / "packages" / pkg)
             paths.append(base_pkg_feeds / "packages" / pkg)
-            # custom_feed 路径仅用于 net_packages 和 utils
-            # luci_apps 在 custom_feed 中有补丁需要保留（如 luci-theme-argon）
-            if category != "luci_apps":
-                if not only_package_feeds:
-                    paths.append(self.build_dir / "custom_feed" / pkg)
-                paths.append(base_pkg_feeds / "custom_feed" / pkg)
-            return paths
+            # custom_feed 路径：所有分类都需要清理 custom_feed 中的包
+            if not only_package_feeds:
+                paths.append(self.build_dir / "custom_feed" / pkg)
+            paths.append(base_pkg_feeds / "custom_feed" / pkg)
+        return paths
 
         for category in ("luci_apps", "net_packages", "utils"):
             for pkg in remove_config.get(category, []):
