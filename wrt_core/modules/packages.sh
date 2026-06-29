@@ -349,6 +349,32 @@ update_smartdns() {
     fi
 }
 
+patch_smartdns() {
+    local SMARTDNS_DIR="$BUILD_DIR/feeds/packages/net/smartdns"
+    local SMARTDNS_PATCH="$BASE_PATH/patches/100-smartdns-optimize.patch"
+    local SMARTDNS_TARGET_PATCH="$SMARTDNS_DIR/patches/100-smartdns-optimize.patch"
+
+    if [ ! -d "$SMARTDNS_DIR" ]; then
+        echo "error: smartdns package directory not found: $SMARTDNS_DIR" >&2
+        exit 1
+    fi
+
+    echo "Patching smartdns..."
+
+    if [ -f "$SMARTDNS_PATCH" ]; then
+        install -Dm644 "$SMARTDNS_PATCH" "$SMARTDNS_TARGET_PATCH"
+    else
+        echo "warning: smartdns optimize patch not found: $SMARTDNS_PATCH" >&2
+    fi
+
+    if [ -f "$SMARTDNS_DIR/Makefile" ]; then
+        sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
+    else
+        echo "error: smartdns Makefile not found: $SMARTDNS_DIR/Makefile" >&2
+        exit 1
+    fi
+}
+
 
 _sync_luci_lib_docker() {
     local lib_path="$BUILD_DIR/feeds/luci/libs/luci-lib-docker"
