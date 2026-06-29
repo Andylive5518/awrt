@@ -939,6 +939,3 @@ docker_stack_sync_nftables_compat() {
         "$build_dir/package/base-files/files/etc/uci-defaults/992-docker-service-timeouts"
     echo "docker 服务超时 uci-defaults 已安装（rpcd=300s, uhttpd network=300s）"
 }
-
-# 验证 docker.uc stream_response_chunks 已被 996-dockerman-events-timeout.patch 修复
-# 996 patch 将阻塞 recv 改为 socket.poll 循环，无硬编码总 deadline，由 uhttpd script_timeout 兜底

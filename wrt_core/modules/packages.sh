@@ -445,11 +445,6 @@ remove_attendedsysupgrade() {
     done
 }
 
-# 修复 kernel 6.18 上 kmod-iptables 与 kmod-nf-ipt 文件冲突
-# 根因：上游 commit 94c7f4a 给 kmod-iptables 添加了显式 FILES 列表
-# （ip_tables.ko, x_tables.ko），而这些文件 kmod-nf-ipt 也提供。
-# 修复方案（上游 PR #23631）：从 kmod-iptables 的 FILES 中删除冲突文件，
-# 让 kmod-nf-ipt 作为唯一提供者。
 fix_netfilter_kmod_clash() {
     local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
 
@@ -481,12 +476,6 @@ fix_netfilter_kmod_clash() {
     echo "kmod-iptables FILES 已清空，kmod-nf-ipt 将作为 ip_tables.ko / x_tables.ko 的唯一提供者"
 }
 
-# xray-core v26.6.22 起 AllowInsecure 字段已从 tls.Config protobuf 中彻底删除，
-# transport_internet.go 中的 c.AllowInsecure 检查也直接返回 PrintRemovedFeatureError。
-# 旧的 AllowInsecure.patch 行号不匹配导致两个 hunk 全部失败。
-# 新补丁直接删除整个 if c.AllowInsecure 块，让配置静默忽略该字段。
-# 注意：此函数在 install_custom_feed 之后调用，此时只有 Makefile 和 patches/，
-# 源码文件（transport_internet.go）要到编译阶段才下载，因此不能依赖读取源码。
 fix_xray_allowinsecure_patch() {
     local xray_dir
     local patch_file
