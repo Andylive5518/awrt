@@ -82,7 +82,7 @@ class PackageManager:
             if not only_package_feeds:
                 paths.append(self.build_dir / "custom_feed" / pkg)
             paths.append(base_pkg_feeds / "custom_feed" / pkg)
-        return paths
+            return paths
 
         for category in ("luci_apps", "net_packages", "utils"):
             for pkg in remove_config.get(category, []):
