@@ -24,11 +24,11 @@ remove_unwanted_packages() {
         "luci-app-msd_lite" "luci-app-unblockneteasemusic" "luci-app-adguardhome" "luci-app-diskman"
         "luci-app-argon-config" "luci-theme-argon" "luci-app-cpufreq" "luci-app-docker"
         "luci-app-wechatpush" "luci-app-zerotier" "luci-app-usb-printer"
-        "luci-app-autoreboot" "luci-app-microsocks"
+        "luci-app-autoreboot" "luci-app-microsocks" "luci-app-smartdns"
     )
     local packages_net=(
         "xray-core" "xray-plugin" "dns2socks" "alist" "hysteria" "v2raya"
-        "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust"
+        "mosdns" "ddns-go" "naiveproxy" "shadowsocks-rust" "smartdns"
         "sing-box" "v2ray-core" "v2ray-geodata" "v2ray-plugin" "tuic-client"
         "chinadns-ng" "ipt2socks" "tcping" "trojan-plus" "simple-obfs" "shadowsocksr-libev"
         "dae" "daed" "mihomo" "geoview" "tailscale" "open-app-filter" "msd_lite" "cdnspeedtest"
@@ -353,6 +353,12 @@ patch_smartdns() {
     echo "正在给 smartdns 打补丁..."
     install -Dm644 "$BASE_PATH/patches/100-smartdns-optimize.patch" "$SMARTDNS_DIR/patches/100-smartdns-optimize.patch"
     sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
+    # The upstream Makefile is written for the packages feed and includes
+    # ../../lang/rust/rust-package.mk. Inside custom_feed that path resolves
+    # to feeds/lang/rust/... which does not exist, so collecting feed metadata
+    # fails with "No such file or directory" / "No rule to make target".
+    # Repoint it to the packages feed copy (feeds/packages/lang/rust/...).
+    sed -i 's#include ../../lang/rust/rust-package.mk#include ../../packages/lang/rust/rust-package.mk#g' "$SMARTDNS_DIR/Makefile"
 }
 
 _sync_luci_lib_docker() {

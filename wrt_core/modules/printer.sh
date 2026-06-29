@@ -41,6 +41,12 @@ define Build/Prepare
 	# 移除 Makefile.am 中的闭源 .so 分发
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_64.so ||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true; \
 	sed -i 's|prnt/hpcups/libImageProcessor-x86_32.so||g' $(PKG_BUILD_DIR)/Makefile.am 2>/dev/null || true
+	# Fix PPD generation: createPPD.sh builds the Dat2drv host tool via
+	# 'make -f Makefile_dat2drv', which inherits OpenWrt target CFLAGS
+	# (-fhonour-copts / -mcpu=...) into the native g++ and aborts with
+	# "unrecognized command-line option '-fhonour-copts'". Override CFLAGS
+	# with clean host flags and tolerate failure so configure can proceed.
+	sed -i 's#^make -f Makefile_dat2drv#make -f Makefile_dat2drv CFLAGS="-O2 -std=c++11" 2>/dev/null || true#' $(PKG_BUILD_DIR)/createPPD.sh 2>/dev/null || true
 endef
 IMAGEPROCESSOR
         sed -i "/^include \$(INCLUDE_DIR)\/package.mk$/r $block" "$makefile"
