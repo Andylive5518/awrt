@@ -31,7 +31,7 @@ class ImageManager:
             cwd=str(self.build_dir), capture_output=True, text=True,
         )
         if result.returncode != 0:
-            self.logger.fail(f"make download 失败: {result.stderr[:500]}")
+            self.logger.fail(f"make download 失败: {result.stderr[:5000]}")
             return False
         self.logger.ok("make download 完成")
         return True
@@ -59,7 +59,7 @@ class ImageManager:
             cwd=str(self.build_dir), capture_output=True, text=True,
         )
         if result.returncode != 0:
-            self.logger.fail(f"构建失败: {result.stderr[:500]}")
+            self.logger.fail(f"构建失败: {result.stderr[:5000]}")
             return False
         self.logger.ok("构建完成")
         return True

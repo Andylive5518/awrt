@@ -7,3 +7,4 @@ docs/
 *.json
 *.md
 build.log
+*.diff

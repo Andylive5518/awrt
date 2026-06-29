@@ -84,7 +84,7 @@ class FeedManager:
         # 移除旧的 custom_feed 条目
         lines = [l for l in lines if CUSTOM_FEED_NAME not in l]
         # 添加新的
-        lines.append(f"src-link {CUSTOM_FEED_NAME} {custom_feed_dir}")
+        lines.insert(0, f"src-link {CUSTOM_FEED_NAME} {custom_feed_dir}")
         feeds_path.write_text("\n".join(lines) + "\n")
         self.logger.ok(f"已将 {CUSTOM_FEED_NAME} 注册为本地 feed 源")
         return True
