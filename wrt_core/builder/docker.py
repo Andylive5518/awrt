@@ -109,7 +109,8 @@ class DockerConfigurator:
   +nftables \\
   +kmod-nft-nat \\
   +tini \\
-  +uci-firewall"""
+  +uci-firewall \
+  @!(mips||mips64||mipsel)"""
 
         # 找到 DEPENDS 行并替换
         lines = content.split("\n")
@@ -120,11 +121,11 @@ class DockerConfigurator:
         for line in lines:
             if re.match(r'^\s*DEPENDS:=\$\((GO_)?ARCH_DEPENDS\) \\$', line):
                 in_depends = True
-                new_lines.append(line)
+                # DEPENDS header consumed, will be replaced by new_depends
                 continue
 
             if in_depends:
-                if re.match(r'^\s+\+', line) or line.rstrip().endswith('\\'):
+                if re.match(r'^\s+\+', line) or line.rstrip().endswith('\\') or re.match(r'^\s+@', line):
                     continue  # 跳过旧依赖
                 else:
                     # DEPENDS 块结束，插入新依赖
