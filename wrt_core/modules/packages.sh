@@ -176,6 +176,7 @@ install_custom_feed() {
     local custom_feed_name
 
     # 主包列表（默认来自 kiddin9/op-packages）
+    # Main custom feed packages.
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2socks hysteria microsocks \
         naiveproxy shadowsocks-rust sing-box geoview v2ray-plugin \
@@ -186,13 +187,15 @@ install_custom_feed() {
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo \
-        luci-app-partexp momo luci-app-momo nikki luci-app-nikki \
+        luci-app-partexp momo luci-app-momo \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
-        luci-app-passwall luci-app-passwall2 mihomo-meta openwrt-bandix luci-app-bandix luci-app-quickfile \
+        luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
         luci-app-diskman luci-theme-argon luci-app-argon-config
     )
-    # 以下包来自 kenzok8/jell（不在 kiddin9/op-packages 中）
+    # Extra packages not reliably provided by the main sparse source.
     local kenzok8_packages=(v2ray-core v2ray-geodata luci-app-fullconenat)
+    # OpenWrt-nikki provides mihomo-meta together with nikki/luci-app-nikki.
+    local nikki_packages=(nikki luci-app-nikki mihomo-meta)
 
     local custom_feed_sources=()
     local required_feed_dirs=()
@@ -211,7 +214,6 @@ install_custom_feed() {
         base_custom_feed_packages+=(fullconenat)
     fi
 
-    # 自动构建 feed 源列表
     custom_feed_sources=(
         "kiddin9/op-packages|https://github.com/kiddin9/op-packages.git||${base_custom_feed_packages[*]}"
     )
@@ -220,9 +222,13 @@ install_custom_feed() {
             "kenzok8/jell|https://github.com/kenzok8/jell.git|main|${kenzok8_packages[*]}"
         )
     fi
+    if [ ${#nikki_packages[@]} -gt 0 ]; then
+        custom_feed_sources+=(
+            "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|${nikki_packages[*]}"
+        )
+    fi
 
-    # 自动构建验证列表（所有包）
-    required_feed_dirs=("${base_custom_feed_packages[@]}" "${kenzok8_packages[@]}")
+    required_feed_dirs=("${base_custom_feed_packages[@]}" "${kenzok8_packages[@]}" "${nikki_packages[@]}")
 
     feeds_path=$(get_feeds_path)
     custom_feed_name=$(get_custom_feed_name)
@@ -266,7 +272,7 @@ verify_custom_feed_installed_paths() {
     local custom_feed_package_dir
     local required_package_dirs=(
         luci-app-adguardhome luci-app-mosdns luci-app-easytier luci-app-homeproxy
-        luci-app-passwall luci-app-nikki v2ray-core v2ray-geodata luci-app-quickfile
+        luci-app-passwall nikki luci-app-nikki mihomo-meta v2ray-core v2ray-geodata luci-app-quickfile
     )
     local missing_package_dirs=()
 
@@ -325,6 +331,23 @@ add_ax6600_led() {
     fi
 }
 
+
+fix_smartdns_rust_package_include() {
+    local smartdns_dir="$1"
+    local makefile="$smartdns_dir/Makefile"
+    local include_path="../../lang/rust/rust-package.mk"
+
+    [ -f "$makefile" ] || return 0
+
+    case "$smartdns_dir" in
+        */feeds/custom_feed/smartdns|*/custom_feed/smartdns)
+            include_path="../../packages/lang/rust/rust-package.mk"
+            ;;
+    esac
+
+    sed -i "s#include ../../\(packages/\)\?lang/rust/rust-package.mk#include ${include_path}#g" "$makefile"
+}
+
 update_smartdns() {
     local SMARTDNS_REPO="https://github.com/ZqinKing/openwrt-smartdns.git"
     local SMARTDNS_DIR="$BUILD_DIR/feeds/packages/net/smartdns"
@@ -339,6 +362,7 @@ update_smartdns() {
     fi
 
     install -Dm644 "$BASE_PATH/patches/100-smartdns-optimize.patch" "$SMARTDNS_DIR/patches/100-smartdns-optimize.patch"
+    fix_smartdns_rust_package_include "$SMARTDNS_DIR"
     sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
 
     echo "正在更新 luci-app-smartdns..."
@@ -368,6 +392,7 @@ patch_smartdns() {
     fi
 
     if [ -f "$SMARTDNS_DIR/Makefile" ]; then
+        fix_smartdns_rust_package_include "$SMARTDNS_DIR"
         sed -i '/define Build\/Compile\/smartdns-ui/,/endef/s/CC=\$(TARGET_CC)/CC="\$(TARGET_CC_NOCACHE)"/' "$SMARTDNS_DIR/Makefile"
     else
         echo "error: smartdns Makefile not found: $SMARTDNS_DIR/Makefile" >&2
@@ -472,7 +497,13 @@ remove_attendedsysupgrade() {
 }
 
 fix_netfilter_kmod_clash() {
+    local include_netfilter_mk="$BUILD_DIR/include/netfilter.mk"
     local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
+
+    if [ -f "$include_netfilter_mk" ] && grep -q 'NF_NATHELPER_EXTRA' "$include_netfilter_mk"; then
+        echo "Cleaning obsolete nathelper-extra definitions from include/netfilter.mk..."
+        sed -i '/^# nathelper-extra$/,/^IPT_BUILTIN += $(NF_NATHELPER_EXTRA-y)$/d' "$include_netfilter_mk"
+    fi
 
     if [ ! -f "$netfilter_mk" ]; then
         echo "fix_netfilter_kmod_clash: netfilter.mk 不存在，跳过"
