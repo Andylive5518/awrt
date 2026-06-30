@@ -350,6 +350,8 @@ steps:
   - remove_packages
   - feeds_install
   - remove_package_links
+  - fix_apk_versions
+  - fix_apk_conflicts
   - generate_config
   - make_download
   - make_build

@@ -340,54 +340,114 @@ class PackageManager:
         return True
 
     def fix_apk_versions(self) -> bool:
-        """修复 APK 版本号格式兼容性。"""
+        """Fix package versions that are rejected by apk-tools.
+
+        ImmortalWrt 25.x uses apk by default. apk-tools rejects versions that
+        start with ``v`` or encode the release number in ``PKG_VERSION`` (for
+        example ``v0.3.4-r1`` and ``0.1.32-1``).
+
+        ``scripts/feeds install`` recreates package links under
+        ``package/feeds``. Run this step after feeds_install and patch both the
+        real ``custom_feed`` directories and package link directories.
+        """
         apk_fixes = self.config.packages.apk_fixes
         if not apk_fixes:
-            self.logger.skip("没有配置 APK 版本修复")
+            self.logger.skip("No APK version fixes configured")
             return True
 
         patch_dir = self.base_path / "patches"
-        custom_feed_dir = self.build_dir / "package" / "feeds" / "custom_feed"
+        package_feeds_dir = self.build_dir / "package" / "feeds"
 
+        def candidate_dirs(pkg_name: str) -> list[Path]:
+            candidates = [
+                self.build_dir / "custom_feed" / pkg_name,
+                package_feeds_dir / "custom_feed" / pkg_name,
+                self.build_dir / "feeds" / "luci" / "applications" / pkg_name,
+                self.build_dir / "feeds" / "luci" / "libs" / pkg_name,
+                self.build_dir / "feeds" / "luci" / "collections" / pkg_name,
+                self.build_dir / "feeds" / "luci" / "themes" / pkg_name,
+                package_feeds_dir / "luci" / pkg_name,
+                package_feeds_dir / "packages" / pkg_name,
+            ]
+
+            # Fallback scan for packages living outside the usual luci
+            # applications/libs directories.
+            for base in (self.build_dir / "custom_feed", self.build_dir / "feeds", package_feeds_dir):
+                if not base.exists():
+                    continue
+                for makefile in base.rglob("Makefile"):
+                    pkg_dir = makefile.parent
+                    if pkg_dir.name != pkg_name:
+                        continue
+                    candidates.append(pkg_dir)
+
+            # Keep order, de-duplicate, and ignore zero-byte placeholders left
+            # by feeds install when symlinks cannot be represented in an
+            # extracted debug archive.
+            seen: set[Path] = set()
+            result: list[Path] = []
+            for path in candidates:
+                try:
+                    key = path.resolve()
+                except OSError:
+                    key = path
+                if key in seen:
+                    continue
+                seen.add(key)
+                if path.is_dir() and (path / "Makefile").exists():
+                    result.append(path)
+            return result
+
+        ok_all = True
         for pkg_name, patch_name in apk_fixes.items():
             patch_file = patch_dir / patch_name
             if not patch_file.exists():
-                self.logger.warn(f"APK 修复 patch 不存在: {patch_file}")
+                self.logger.warn(f"APK fix patch does not exist: {patch_file}")
+                ok_all = False
                 continue
 
-            pkg_dirs = [
-                custom_feed_dir / pkg_name,
-                self.build_dir / "feeds" / "luci" / "applications" / pkg_name,
-                self.build_dir / "package" / "feeds" / "luci" / pkg_name,
-            ]
-            target_dir = None
-            for d in pkg_dirs:
-                if d.exists():
-                    target_dir = d
-                    break
-
-            if not target_dir:
-                self.logger.skip(f"包目录不存在: {pkg_name}，跳过 APK 版本修复")
+            pkg_dirs = candidate_dirs(pkg_name)
+            if not pkg_dirs:
+                self.logger.skip(f"Package directory not found: {pkg_name}; skip APK version fix")
                 continue
 
-            result = subprocess.run(
-                ["patch", "--dry-run", "-p1", "-d", str(target_dir), "-i", str(patch_file)],
-                capture_output=True, text=True, check=False,
-            )
-            if result.returncode != 0:
-                self.logger.skip(f"{pkg_name}: APK 版本 patch 已存在或无法应用")
-                continue
+            applied = 0
+            skipped = 0
+            failed = 0
+            for target_dir in pkg_dirs:
+                result = subprocess.run(
+                    ["patch", "--dry-run", "-p1", "-d", str(target_dir), "-i", str(patch_file)],
+                    capture_output=True, text=True, check=False,
+                )
+                if result.returncode != 0:
+                    skipped += 1
+                    self.logger.debug(
+                        f"{pkg_name}: APK version patch already applied or not applicable: "
+                        f"{target_dir.relative_to(self.build_dir)}"
+                    )
+                    continue
 
-            result = subprocess.run(
-                ["patch", "-p1", "-d", str(target_dir), "-i", str(patch_file)],
-                capture_output=True, text=True, check=False,
-            )
-            if result.returncode == 0:
-                self.logger.ok(f"{pkg_name}: APK 版本已修复")
-            else:
-                self.logger.fail(f"{pkg_name}: APK 版本修复失败: {result.stderr[:200]}")
+                result = subprocess.run(
+                    ["patch", "-p1", "-d", str(target_dir), "-i", str(patch_file)],
+                    capture_output=True, text=True, check=False,
+                )
+                if result.returncode == 0:
+                    applied += 1
+                    self.logger.ok(
+                        f"{pkg_name}: APK version fixed: {target_dir.relative_to(self.build_dir)}"
+                    )
+                else:
+                    failed += 1
+                    ok_all = False
+                    self.logger.fail(
+                        f"{pkg_name}: APK version fix failed: "
+                        f"{target_dir.relative_to(self.build_dir)}: {result.stderr[:200]}"
+                    )
 
-        return True
+            if applied == 0 and skipped > 0 and failed == 0:
+                self.logger.skip(f"{pkg_name}: APK version patch already applied or unnecessary")
+
+        return ok_all
 
     def fix_apk_conflicts(self) -> bool:
         """修复 APK 文件冲突（删除重复的 init 脚本等）。"""

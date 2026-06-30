@@ -143,6 +143,8 @@ def main():
             "remove_packages": packages.remove_unwanted,
             "remove_package_links": packages.remove_package_links,
             "install_custom_feed": feeds.install_custom_feed,
+            "fix_apk_versions": packages.fix_apk_versions,
+            "fix_apk_conflicts": packages.fix_apk_conflicts,
             "apply_patches": lambda: all(
                 r.fail_count == 0
                 for r in patches.apply_all()

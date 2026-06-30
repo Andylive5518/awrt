@@ -193,11 +193,24 @@ jobs:
 
           echo "  正在打包全部编译产物，请稍候..."
           echo "  源目录: ${OPENWRT_PATH}"
-          echo "  预估大小: $(du -sh "${OPENWRT_PATH}" --exclude=.ccache --exclude=staging_dir 2>/dev/null | cut -f1)"
+          echo "  Estimated size: $(du -sh "${OPENWRT_PATH}" \
+            --exclude=.ccache \
+            --exclude=staging_dir \
+            --exclude=bin \
+            --exclude=tmp \
+            --exclude=build_dir \
+            --exclude=dl \
+            --exclude=LICENSES \
+            2>/dev/null | cut -f1)"
 
           tar -czf "/tmp/build2025_full.tar.gz" \
             --exclude=".ccache" \
             --exclude="staging_dir" \
+            --exclude="bin" \
+            --exclude="tmp" \
+            --exclude="build_dir" \
+            --exclude="dl" \
+            --exclude="LICENSES" \
             --exclude=".git" \
             -C "${OPENWRT_PATH}" .
 
