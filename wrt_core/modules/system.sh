@@ -38,11 +38,26 @@ change_dnsmasq2full() {
 }
 
 fix_kconfig_recursive_dependency() {
-    local file="$BUILD_DIR/scripts/package-metadata.pl"
-    if [ -f "$file" ]; then
-        sed -i 's/<PACKAGE_\$pkgname/!=y/g' "$file"
-        echo "已修复 package-metadata.pl 的 Kconfig 递归依赖生成逻辑。"
-    fi
+    local feed_dir mk pkg
+    feed_dir="$(get_custom_feed_source_dir)"
+
+    # passwall/passwall2 put "depends on PACKAGE_$(PKG_NAME)" inside their own
+    # Package/$(PKG_NAME)/config block. Combined with the conditional deps
+    # (+PACKAGE_$(PKG_NAME)_INCLUDE_xxx:...) in LUCI_DEPENDS this yields a Kconfig
+    # recursive dependency: PACKAGE_<pkg> <-> PACKAGE_<pkg>_INCLUDE_<opt>, which
+    # aborts make defconfig with "recursive dependency detected!".
+    # The earlier package-metadata.pl rewrite (<PACKAGE_$pkgname -> !=y) matched
+    # nothing in current OpenWrt and never fixed this. Drop the self-referential
+    # "depends on" instead; INCLUDE options stay bound to the package via their
+    # conditional dependencies, so nothing is lost.
+    for pkg in luci-app-passwall luci-app-passwall2; do
+        mk="$feed_dir/$pkg/Makefile"
+        [ -f "$mk" ] || continue
+        if grep -q '^[[:space:]]*depends on PACKAGE_\$(PKG_NAME)[[:space:]]*$' "$mk"; then
+            sed -i '/^[[:space:]]*depends on PACKAGE_\$(PKG_NAME)[[:space:]]*$/d' "$mk"
+            echo "[kconfig] removed recursive self-dependency in $pkg"
+        fi
+    done
 }
 
 update_default_lan_addr() {
@@ -580,64 +595,62 @@ update_ath11k_fw() {
     echo "正在更新 ath11k-firmware Makefile..."
 
     local tmp_mk
-    tmp_mk=$(mktemp) || { echo "错误：无法创建临时文件" >&2; exit 1; }
+    tmp_mk=$(mktemp) || { echo "error: failed to create temporary file" >&2; exit 1; }
 
-    # Download upstream Makefile; fall back to local copy on failure
-    if ! curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url"; then
-        echo "警告：从 $url 下载失败，使用本地 ath11k-firmware Makefile" >&2
+    # Download upstream Makefile; fall back to the local copy on failure.
+    if curl -fsSL --connect-timeout 15 --max-time 30 -o "$tmp_mk" "$url" && \
+       [ -s "$tmp_mk" ] && grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
+        mv -f "$tmp_mk" "$makefile"
+    else
+        echo "warning: failed to download a valid ath11k-firmware Makefile; using local fallback" >&2
         rm -f "$tmp_mk"
         if [ -f "$local_mk" ]; then
             cp -f "$local_mk" "$makefile"
-            return 0
+        else
+            echo "error: no usable ath11k-firmware Makefile fallback: $local_mk" >&2
+            exit 1
         fi
-        echo "错误：无法从远程下载，本地备用文件也不存在" >&2
-        exit 1
     fi
 
-    if [ ! -s "$tmp_mk" ]; then
-        echo "警告：下载的 ath11k-firmware Makefile 为空，使用本地备用文件" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：下载的文件为空，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    if ! grep -q '^PKG_MIRROR_HASH:=' "$tmp_mk"; then
-        echo "警告：下载的 Makefile 缺少 PKG_MIRROR_HASH，使用本地备用文件" >&2
-        rm -f "$tmp_mk"
-        if [ -f "$local_mk" ]; then
-            cp -f "$local_mk" "$makefile"
-            return 0
-        fi
-        echo "错误：下载的文件格式无效，本地备用文件也不存在" >&2
-        exit 1
-    fi
-
-    mv -f "$tmp_mk" "$makefile"
-    if [ -f "$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk" ]; then
-        sed -i 's/ath11k-firmware-ipq6018\([^-[:alnum:]_]\|\$\)/ath11k-firmware-ipq6018-ddwrt\1/g' "$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk"
-    fi
-    rm -f "$tmp_mk"
+    # The ddwrt ath11k-firmware Makefile only ships *-ddwrt variants, but the
+    # qualcommax target/device makefiles still reference the legacy linux-firmware
+    # names (ath11k-firmware-ipq5018/ipq6018/ipq8074/qcn9074). Repoint them to the
+    # matching -ddwrt variants so the firmware actually comes from the ddwrt feed.
+    # [^-[:alnum:]_] avoids touching names that already carry a suffix (-ddwrt /
+    # -qcn6122), keeping the rewrite idempotent.
+    local f chip
+    for f in \
+        "$BUILD_DIR/target/linux/qualcommax/ipq50xx/ipq50xx.mk" \
+        "$BUILD_DIR/target/linux/qualcommax/ipq60xx/target.mk" \
+        "$BUILD_DIR/target/linux/qualcommax/ipq807x/target.mk" \
+        "$BUILD_DIR/target/linux/qualcommax/ipq807x/ipq807x.mk" \
+        "$BUILD_DIR/target/linux/qualcommax/image/ipq50xx.mk" \
+        "$BUILD_DIR/target/linux/qualcommax/image/ipq60xx.mk" \
+        "$BUILD_DIR/target/linux/qualcommax/image/ipq807x.mk"; do
+        [ -f "$f" ] || continue
+        for chip in ipq5018 ipq6018 ipq8074 qcn9074; do
+            sed -i 's/ath11k-firmware-'"${chip}"'\([^-[:alnum:]_]\|\$\)/ath11k-firmware-'"${chip}"'-ddwrt\1/g' "$f"
+        done
+    done
 }
 
 update_nss_diag() {
     local file="$BUILD_DIR/package/kernel/mac80211/files/nss_diag.sh"
     [ -f "$file" ] || return 0
-    \rm -f "$file"
+    [ -f "$BASE_PATH/patches/nss_diag.sh" ] || return 0
+    rm -f "$file"
     install -Dm755 "$BASE_PATH/patches/nss_diag.sh" "$file"
 }
 
 update_script_priority() {
-    local path
-    for path in \
+    local item file prio
+    for item in \
         "$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init:88" \
         "$BUILD_DIR/package/kernel/mac80211/files/qca-nss-pbuf.init:89" \
         "$(get_custom_feed_package_dir)/luci-app-mosdns/root/etc/init.d/mosdns:94"; do
-        local file="${path%:*}" prio="${path##*:}"
-        [ -f "$file" ] && sed -i "s/START=.*/START=$prio/g" "$file"
+        file="${item%:*}"
+        prio="${item##*:}"
+        [ -f "$file" ] && sed -i "s/^START=.*/START=$prio/g" "$file"
     done
 }
 
@@ -652,16 +665,19 @@ update_geoip() {
     local geodata_path="$(get_custom_feed_package_dir)/v2ray-geodata/Makefile"
     [ -f "$geodata_path" ] || return 0
 
-    local GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' "$geodata_path" | grep -oE "[0-9]{1,}")
+    local GEOIP_VER
+    GEOIP_VER=$(awk -F"=" '/GEOIP_VER:=/ {print $NF}' "$geodata_path" | grep -oE "[0-9]{1,}")
     [ -n "$GEOIP_VER" ] || return 0
 
     local base_url="https://github.com/v2fly/geoip/releases/download/${GEOIP_VER}"
     local old_SHA256 new_SHA256
     old_SHA256=$(wget -qO- "$base_url/geoip.dat.sha256sum" 2>/dev/null | awk '{print $1}') || {
-        echo "错误：获取 geoip.dat 校验和失败" >&2; return 1
+        echo "error: failed to fetch geoip.dat checksum" >&2
+        return 1
     }
     new_SHA256=$(wget -qO- "$base_url/geoip-only-cn-private.dat.sha256sum" 2>/dev/null | awk '{print $1}') || {
-        echo "错误：获取 geoip-only-cn-private.dat 校验和失败" >&2; return 1
+        echo "error: failed to fetch geoip-only-cn-private.dat checksum" >&2
+        return 1
     }
 
     [ -n "$old_SHA256" ] && [ -n "$new_SHA256" ] || return 0
@@ -676,10 +692,57 @@ fix_rust_compile_error() {
 }
 
 fix_easytier_mk() {
-    local mk_path="$(get_custom_feed_worktree_dir)/luci-app-easytier/easytier/Makefile"
-    if [ -f "$mk_path" ]; then
-        sed -i 's/!@(mips||mipsel)/!TARGET_mips \&\& !TARGET_mipsel/g' "$mk_path"
-    fi
+    local mk_path
+
+    # Current OpenWrt-nikki layout has luci-app-easytier/Makefile directly;
+    # older layouts used luci-app-easytier/easytier/Makefile. Patch both.
+    for mk_path in \
+        "$(get_custom_feed_worktree_dir)/luci-app-easytier/Makefile" \
+        "$(get_custom_feed_worktree_dir)/luci-app-easytier/easytier/Makefile"; do
+        [ -f "$mk_path" ] || continue
+
+        # Avoid build-root postinsts acting on the host /etc. When APK/opkg
+        # installs into IPKG_INSTROOT, chmod/enable the target rootfs instead;
+        # only run backup restore on live-device installs.
+        python3 - "$mk_path" <<'PY'
+from pathlib import Path
+import re
+import sys
+p = Path(sys.argv[1])
+s = p.read_text(encoding="utf-8")
+postinst = '''define Package/$(PKG_NAME)/postinst
+#!/bin/sh
+root="$${IPKG_INSTROOT}"
+
+[ -f "$${root}/etc/init.d/easytier" ] && chmod +x "$${root}/etc/init.d/easytier"
+if [ -n "$${root}" ]; then
+	mkdir -p "$${root}/etc/rc.d"
+	ln -sf ../init.d/easytier "$${root}/etc/rc.d/S99easytier"
+	exit 0
+fi
+
+/etc/init.d/easytier enable >/dev/null 2>&1 || true
+if [ -f /tmp/easytier_backup ] ; then
+  echo "found /tmp/easytier_backup, restoring /etc/config/easytier"
+  rm -rf /etc/config/easytier
+  mv -f /tmp/easytier_backup /etc/config/easytier
+  echo "please restart EasyTier from LuCI"
+fi
+if [ -d /tmp/et_config_backup ] ; then
+  echo "found /tmp/et_config_backup, restoring /etc/easytier"
+  rm -rf /etc/easytier
+  mv -f /tmp/et_config_backup /etc/easytier
+  echo "please restart EasyTier from LuCI"
+fi
+exit 0
+endef'''
+s2, n = re.subn(r'define Package/\$\(PKG_NAME\)/postinst\n.*?\nendef', postinst, s, flags=re.S)
+if n == 0:
+    s2 = s.rstrip() + '\n\n' + postinst + '\n'
+s2 = s2.replace('!@(mips||mipsel)', '!TARGET_mips && !TARGET_mipsel')
+p.write_text(s2, encoding="utf-8")
+PY
+    done
 }
 
 fix_easytier_lua() {

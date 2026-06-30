@@ -167,6 +167,34 @@ register_local_feed_source() {
     echo "已将 $feed_name 作为本地源 (src-link) 添加到 $feeds_path"
 }
 
+fix_mihomo_meta_preference() {
+    local custom_feed_dir="$1"
+    local nikki_mk="$custom_feed_dir/nikki/Makefile"
+    local meta_mk="$custom_feed_dir/mihomo-meta/Makefile"
+
+    [ -d "$custom_feed_dir" ] || return 0
+
+    # Do not expose the alpha/core package as a real PACKAGE_mihomo. Nikki depends
+    # on a Mihomo provider and should select the maintained mihomo-meta package.
+    rm -rf "$custom_feed_dir/mihomo" "$custom_feed_dir/mihomo-alpha"
+
+    if [ -f "$nikki_mk" ]; then
+        sed -i 's/+mihomo\([[:space:]]\|$\)/+mihomo-meta\1/g' "$nikki_mk"
+    fi
+
+    if [ -f "$meta_mk" ]; then
+        grep -q '^  PROVIDES:=mihomo' "$meta_mk" || \
+            sed -i '/^  DEPENDS:=/a\  PROVIDES:=mihomo' "$meta_mk"
+        if grep -q '^  CONFLICTS:=' "$meta_mk"; then
+            sed -i 's/^  CONFLICTS:=.*/  CONFLICTS:=mihomo mihomo-alpha/' "$meta_mk"
+        else
+            sed -i '/^  PROVIDES:=/a\  CONFLICTS:=mihomo mihomo-alpha' "$meta_mk"
+        fi
+        grep -q '^  DEFAULT_VARIANT:=1' "$meta_mk" || \
+            sed -i '/^  VARIANT:=/a\  DEFAULT_VARIANT:=1' "$meta_mk"
+    fi
+}
+
 install_custom_feed() {
     local feeds_path
     local fullconenat_nft_dir="$BUILD_DIR/package/network/utils/fullconenat-nft"
@@ -186,7 +214,7 @@ install_custom_feed() {
         luci-app-quickstart luci-app-istorex \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
-        msd_lite luci-app-msd_lite cups luci-app-cupsd mihomo \
+        msd_lite luci-app-msd_lite cups luci-app-cupsd \
         luci-app-partexp momo luci-app-momo \
         luci-app-zerotier luci-app-wechatpush luci-app-autoreboot mosdns luci-app-mosdns \
         luci-app-passwall luci-app-passwall2 openwrt-bandix luci-app-bandix luci-app-quickfile \
@@ -250,6 +278,8 @@ install_custom_feed() {
             return 1
         fi
     done
+
+    fix_mihomo_meta_preference "$custom_feed_dir"
 
     register_local_feed_source "$custom_feed_dir" "$feeds_path"
 
@@ -325,10 +355,45 @@ add_ax6600_led() {
     if [ -d "$athena_led_dir" ]; then
         chmod +x "$athena_led_dir/root/usr/sbin/athena-led"
         chmod +x "$athena_led_dir/root/etc/init.d/athena_led"
+        fix_athena_led_postinst "$athena_led_dir"
     else
-        echo "错误：克隆操作后未找到目录 $athena_led_dir" >&2
+        echo "error: cloned luci-app-athena-led directory not found: $athena_led_dir" >&2
         exit 1
     fi
+}
+
+fix_athena_led_postinst() {
+    local athena_led_dir="$1"
+    local makefile="$athena_led_dir/Makefile"
+
+    [ -f "$makefile" ] || return 0
+
+    python3 - "$makefile" <<'PY'
+from pathlib import Path
+import re
+import sys
+p = Path(sys.argv[1])
+s = p.read_text(encoding="utf-8")
+postinst = '''define Package/$(PKG_NAME)/postinst
+#!/bin/sh
+root="$${IPKG_INSTROOT}"
+
+[ -f "$${root}/usr/sbin/athena-led" ] && chmod +x "$${root}/usr/sbin/athena-led"
+[ -f "$${root}/etc/init.d/athena_led" ] && chmod +x "$${root}/etc/init.d/athena_led"
+if [ -n "$${root}" ]; then
+	mkdir -p "$${root}/etc/rc.d"
+	ln -sf ../init.d/athena_led "$${root}/etc/rc.d/S99athena_led"
+	exit 0
+fi
+
+/etc/init.d/athena_led enable >/dev/null 2>&1 || true
+exit 0
+endef'''
+s2, n = re.subn(r'define Package/\$\(PKG_NAME\)/postinst\n.*?\nendef', postinst, s, flags=re.S)
+if n == 0:
+    s2 = s.rstrip() + '\n\n' + postinst + '\n'
+p.write_text(s2, encoding="utf-8")
+PY
 }
 
 
