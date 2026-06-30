@@ -115,12 +115,23 @@ class SystemConfigurator:
     # ---- PBR ISP 路由 ----
 
     def _install_pbr_isp(self, isp_lower: str, isp_upper: str) -> bool:
-        """安装 PBR ISP 配置文件。"""
+        """Install PBR ISP user-include config files and register them.
+
+        The pbr package only ships a fixed set of pbr.user.* files.  We copy
+        the per-ISP variants into the package files tree and extend the
+        ``Package/pbr/install`` stanza so they land in the image.
+
+        The install rules MUST be inserted on their own lines and AFTER the
+        ``$(INSTALL_DIR) $(1)/usr/share/pbr`` line.  Earlier code appended the
+        rules to the ``define Package/pbr/install`` line itself (no newline),
+        which corrupted the Makefile and made OpenWrt report "package has no
+        install section", skipping pbr entirely.
+        """
         pbr_pkg_dir = self.build_dir / "package" / "feeds" / "packages" / "pbr"
         if not pbr_pkg_dir.exists():
             pbr_pkg_dir = self.build_dir / "feeds" / "packages" / "net" / "pbr"
         if not pbr_pkg_dir.exists():
-            self.logger.warn(f"PBR 包目录不存在")
+            self.logger.warn("PBR package directory not found")
             return False
 
         pbr_dir = pbr_pkg_dir / "files" / "usr" / "share" / "pbr"
@@ -128,7 +139,7 @@ class SystemConfigurator:
 
         config_dir = self.base_path / self.config.pbr.config_dir
 
-        # 复制 IPv4 和 IPv6 配置
+        # Copy IPv4 and IPv6 ISP configs into the package files tree.
         for suffix in ("", "6"):
             src = config_dir / f"pbr.user.{isp_lower}{suffix}"
             dst = pbr_dir / f"pbr.user.{isp_lower}{suffix}"
@@ -136,24 +147,40 @@ class SystemConfigurator:
                 if dst.exists():
                     dst.chmod(0o644)
                 shutil.copy2(src, dst)
-                self.logger.ok(f"PBR {isp_upper}{' IPv6' if suffix else ''} 配置已安装")
+                self.logger.ok(f"PBR {isp_upper}{' IPv6' if suffix else ''} config installed")
 
-        # 修改 Makefile 添加安装规则
+        # Register the new files in Package/pbr/install.
         makefile = pbr_pkg_dir / "Makefile"
-        if makefile.exists():
-            content = makefile.read_text()
-            if f"pbr.user.{isp_lower}" not in content:
-                # 在 Package/pbr/install 段添加
-                new_rules = f'\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.{isp_lower} $(1)/usr/share/pbr/pbr.user.{isp_lower}\n'
-                new_rules += f'\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.{isp_lower}6 $(1)/usr/share/pbr/pbr.user.{isp_lower}6\n'
-                if "define Package/pbr/install" in content:
-                    content = content.replace(
-                        "define Package/pbr/install",
-                        "define Package/pbr/install" + new_rules,
-                    )
-                    makefile.write_text(content)
-                    self.logger.ok(f"PBR Makefile 已添加 {isp_upper} 安装规则")
+        if not makefile.exists():
+            return True
+        content = makefile.read_text()
+        if f"pbr.user.{isp_lower}" in content:
+            return True  # already registered
 
+        new_rules = (
+            f"\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.{isp_lower}"
+            f" $(1)/usr/share/pbr/pbr.user.{isp_lower}\n"
+            f"\t$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.{isp_lower}6"
+            f" $(1)/usr/share/pbr/pbr.user.{isp_lower}6\n"
+        )
+
+        # Preferred anchor: the line that creates /usr/share/pbr, so the
+        # directory always exists before INSTALL_DATA runs.
+        marker = "\t$(INSTALL_DIR) $(1)/usr/share/pbr\n"
+        if marker in content:
+            content = content.replace(marker, marker + new_rules, 1)
+        elif "define Package/pbr/install\n" in content:
+            content = content.replace(
+                "define Package/pbr/install\n",
+                "define Package/pbr/install\n" + new_rules,
+                1,
+            )
+        else:
+            self.logger.warn("PBR Makefile install stanza not found; skipping rule injection")
+            return True
+
+        makefile.write_text(content)
+        self.logger.ok(f"PBR Makefile {isp_upper} install rule added")
         return True
 
     def _fix_pbr_ip_forward(self) -> bool:
