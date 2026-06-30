@@ -210,7 +210,7 @@ jobs:
 
           if [ "${ARCHIVE_SIZE}" -gt 2147483648 ]; then
             echo "  文件超过 2GB，分割为多个部分..."
-            split -b 1800M "/tmp/build2025_full.tar.gz" "${SPLIT_DIR}/build2025_full.tar.gz.part."
+            split -b 256M "/tmp/build2025_full.tar.gz" "${SPLIT_DIR}/build2025_full.tar.gz.part."
             echo "  分割完成，共 $(ls -1 "${SPLIT_DIR}" | wc -l) 个部分"
             FINAL_DIR="$SPLIT_DIR"
           else
@@ -255,11 +255,11 @@ jobs:
             echo "  上传 ${asset_name} ..."
             upload_url="https://uploads.github.com/repos/${UPLOAD_REPO}/releases/${release_id}/assets?name=${asset_name}"
 
-            resp=$(curl -s -w "\n%{http_code}" -X POST \
+            resp=$(curl --fail-with-body -s -w "\n%{http_code}" -X POST \
               -H "Authorization: token ${GITHUB_TOKEN}" \
               -H "Content-Type: application/octet-stream" \
               --data-binary "@${local_file}" \
-              "$upload_url")
+              "$upload_url" || true)
 
             put_code=$(echo "$resp" | tail -n1)
             if [ "$put_code" = "200" ] || [ "$put_code" = "201" ]; then

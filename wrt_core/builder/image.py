@@ -6,6 +6,7 @@
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .config import BuildConfig
@@ -99,12 +100,29 @@ class ImageManager:
             )
 
         self.logger.info(f"执行 make -j{jobs} V=s...")
-        result = subprocess.run(
-            ["make", f"-j{jobs}", "V=s"],
-            cwd=str(self.build_dir), capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            self.logger.fail(f"构建失败: {result.stderr[:5000]}")
+        log_path = self.base_path.parent / "make_build_full.log"
+        tail_lines: list[str] = []
+        with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+            process = subprocess.Popen(
+                ["make", f"-j{jobs}", "V=s"],
+                cwd=str(self.build_dir),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert process.stdout is not None
+            for line in process.stdout:
+                log_file.write(line)
+                sys.stdout.write(line)
+                if len(tail_lines) >= 200:
+                    tail_lines.pop(0)
+                tail_lines.append(line.rstrip("\n"))
+            return_code = process.wait()
+
+        if return_code != 0:
+            tail = "\n".join(tail_lines[-120:])
+            self.logger.fail(f"构建失败，完整日志: {log_path}\n--- make build tail ---\n{tail}")
             return False
         self.logger.ok("构建完成")
         return True
