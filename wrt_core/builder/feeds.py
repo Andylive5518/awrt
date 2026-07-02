@@ -144,6 +144,37 @@ class FeedManager:
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    def _fix_xray_allow_insecure_patch(self, custom_feed_dir: Path) -> bool:
+        """Rewrite xray-core AllowInsecure patch for newer Xray-core sources.
+
+        kiddin9/op-packages still carries a patch for an older Xray-core tree
+        that removed a time-gated allowInsecure warning.  Xray-core 26.6.27
+        removed the time gate and now returns PrintRemovedFeatureError()
+        directly, so the old patch no longer applies.
+        """
+        patch_file = custom_feed_dir / "xray-core" / "patches" / "AllowInsecure.patch"
+        if not patch_file.exists():
+            return False
+
+        patch_lines = [
+            "--- a/infra/conf/transport_internet.go",
+            "+++ b/infra/conf/transport_internet.go",
+            "@@ -730,7 +730,7 @@ func (c *TLSConfig) Build() (proto.Message, error) {",
+            " \tconfig.MasterKeyLog = c.MasterKeyLog",
+            " ",
+            " \tif c.AllowInsecure {",
+            "-\t\treturn nil, errors.PrintRemovedFeatureError(`\"allowInsecure\"`, `\"pinnedPeerCertSha256\"(pcs) and \"verifyPeerCertByName\"(vcn)`)",
+            "+\t\tconfig.AllowInsecure = true",
+            " \t}",
+            ' \tif c.PinnedPeerCertSha256 != "" {',
+            ' \t\tfor v := range strings.SplitSeq(c.PinnedPeerCertSha256, ",") {',
+            "",
+        ]
+        with patch_file.open("w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(patch_lines))
+        self.logger.ok("xray-core: AllowInsecure.patch updated for Xray-core 26.6.27")
+        return True
+
     def install_custom_feed(self) -> bool:
         """稀疏克隆自定义 feed 源并注册为本地 feed。"""
         sources = self.config.feeds.sources
@@ -167,6 +198,8 @@ class FeedManager:
                 self.logger.warn(f"{source.label}: 同步失败，继续下一个源")
 
         # 注册为本地 feed 源
+        self._fix_xray_allow_insecure_patch(custom_feed_dir)
+
         self._register_local_feed_source(custom_feed_dir)
 
         # 更新 custom_feed 索引
