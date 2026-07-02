@@ -36,7 +36,6 @@ package_manager:
 packages:
   remove:
     luci_apps:
-      - luci-app-passwall
       - luci-app-ddns-go
       - luci-app-rclone
       - luci-app-ssr-plus
@@ -44,23 +43,18 @@ packages:
       - luci-app-daed
       - luci-app-dae
       - luci-app-alist
-      - luci-app-homeproxy
       - luci-app-haproxy-tcp
-      - luci-app-openclash
       - luci-app-mihomo
       - luci-app-appfilter
       - luci-app-msd_lite
       - luci-app-unblockneteasemusic
       - luci-app-adguardhome
-      - luci-app-diskman
       - luci-app-argon-config
       - luci-app-cpufreq
       - luci-app-docker
       - luci-app-dockerman
       - luci-app-wechatpush
-      - luci-app-zerotier
       - luci-app-usb-printer
-      - luci-app-autoreboot
       - luci-app-microsocks
     net_packages:
       - xray-core
@@ -69,7 +63,6 @@ packages:
       - alist
       - hysteria
       - v2raya
-      - mosdns
       - ddns-go
       - naiveproxy
       - shadowsocks-rust

@@ -56,8 +56,15 @@ class PackageManager:
         base_pkg_feeds = self.build_dir / "package" / "feeds"
 
         # 构建搜索路径列表
+        # custom_feed is the user's replacement feed.  Do not delete source
+        # directories under action_build/custom_feed.  The remove list is used
+        # to remove duplicate upstream packages so custom_feed packages can win.
+        custom_feed_src = self.build_dir / "custom_feed"
+
         def search_paths(category: str, pkg: str) -> list[Path]:
+            custom_feed_has_pkg = (custom_feed_src / pkg).is_dir()
             paths = []
+
             if category == "luci_apps":
                 if not only_package_feeds:
                     paths.extend([
@@ -74,16 +81,19 @@ class PackageManager:
                 if not only_package_feeds:
                     paths.append(base_feeds / "packages" / "utils" / pkg)
                 paths.append(base_pkg_feeds / "packages" / pkg)
-            # 回退：某些包直接位于 feeds/packages/<pkg>（不在子分类目录下）
+
+            # Fallback: some packages live directly under feeds/packages/<pkg>.
             if not only_package_feeds:
                 paths.append(base_feeds / "packages" / pkg)
             paths.append(base_pkg_feeds / "packages" / pkg)
-            # custom_feed 路径：所有分类都需要清理 custom_feed 中的包
-            if not only_package_feeds:
-                paths.append(self.build_dir / "custom_feed" / pkg)
-            paths.append(base_pkg_feeds / "custom_feed" / pkg)
-            return paths
 
+            # Only remove stale custom_feed symlinks/placeholders when the
+            # corresponding source package is not present.  Never delete the
+            # action_build/custom_feed source directory itself.
+            if not custom_feed_has_pkg:
+                paths.append(base_pkg_feeds / "custom_feed" / pkg)
+
+            return paths
         for category in ("luci_apps", "net_packages", "utils"):
             for pkg in remove_config.get(category, []):
                 for path in search_paths(category, pkg):
