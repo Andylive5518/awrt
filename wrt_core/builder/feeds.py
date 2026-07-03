@@ -1,23 +1,19 @@
 """Feed 管理。
 
 管理 feeds 的更新、安装和自定义 feed 的稀疏克隆。
-支持多个 feed 源和外部独立仓库。
+支持多个 feed 源。
 """
 
-import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
-from .config import BuildConfig, FeedSource, ExternalFeed
+from .config import BuildConfig
 from .logger import BuildLogger
 
 
 CUSTOM_FEED_NAME = "custom_feed"
-
-GOLANG_REPO = "https://github.com/sbwml/packages_lang_golang"
-GOLANG_BRANCH = "26.x"
 
 
 class FeedManager:
@@ -242,122 +238,4 @@ class FeedManager:
         )
 
         self.logger.ok("自定义 feed 安装完成")
-        return True
-
-    # ---- 外部独立仓库 ----
-
-    def update_golang(self) -> bool:
-        """更新 golang 包到指定版本。"""
-        golang_dir = self.build_dir / "feeds" / "packages" / "lang" / "golang"
-        if not golang_dir.exists():
-            self.logger.skip("golang 目录不存在，跳过")
-            return True
-
-        self.logger.info("正在更新 golang 软件包...")
-        shutil.rmtree(golang_dir)
-
-        result = subprocess.run(
-            ["git", "clone", "--depth", "1", "-b", GOLANG_BRANCH,
-             GOLANG_REPO, str(golang_dir)],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            self.logger.fail(f"golang 更新失败: {result.stderr[:200]}")
-            return False
-
-        self.logger.ok("golang 已更新")
-        return True
-
-    def update_smartdns(self) -> bool:
-        """更新 smartdns 和 luci-app-smartdns。"""
-        external = self.config.feeds.external
-        smartdns_cfg = external.get("smartdns")
-        luci_smartdns_cfg = external.get("luci_app_smartdns")
-
-        if not smartdns_cfg:
-            self.logger.skip("没有配置 smartdns 外部仓库")
-            return True
-
-        # smartdns 核心
-        target_dir = self.build_dir / smartdns_cfg.target
-        if target_dir.exists():
-            shutil.rmtree(target_dir)
-
-        self.logger.info("正在更新 smartdns...")
-        result = subprocess.run(
-            ["git", "clone", "--depth", "1", smartdns_cfg.repo, str(target_dir)],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            self.logger.fail(f"smartdns 克隆失败: {result.stderr[:200]}")
-            return False
-
-        # 应用 smartdns 优化 patch
-        patch_dir = self.base_path / "patches"
-        for patch_name in smartdns_cfg.patches:
-            patch_file = patch_dir / patch_name
-            if patch_file.exists():
-                # 复制 patch 到 smartdns 目录的 patches 子目录
-                smartdns_patches_dir = target_dir / "patches"
-                smartdns_patches_dir.mkdir(exist_ok=True)
-                shutil.copy2(patch_file, smartdns_patches_dir / patch_name)
-                self.logger.ok(f"smartdns: patch {patch_name} 已安装")
-
-        # 跳过 PKG_MIRROR_HASH 检查
-        makefile = target_dir / "Makefile"
-        if makefile.exists():
-            content = makefile.read_text()
-            content = content.replace(
-                "PKG_MIRROR_HASH:=",
-                "PKG_MIRROR_HASH:=skip  # ",
-            )
-            makefile.write_text(content)
-
-        # luci-app-smartdns
-        if luci_smartdns_cfg:
-            luci_target = self.build_dir / luci_smartdns_cfg.target
-            if luci_target.exists():
-                shutil.rmtree(luci_target)
-
-            self.logger.info("正在更新 luci-app-smartdns...")
-            result = subprocess.run(
-                ["git", "clone", "--depth", "1", luci_smartdns_cfg.repo, str(luci_target)],
-                capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                self.logger.warn(f"luci-app-smartdns 克隆失败: {result.stderr[:200]}")
-            else:
-                self.logger.ok("luci-app-smartdns 已更新")
-
-        self.logger.ok("smartdns 更新完成")
-        return True
-
-    def install_external_feeds(self) -> bool:
-        """安装所有外部 feed 仓库（除 smartdns 外）。"""
-        external = self.config.feeds.external
-        if not external:
-            return True
-
-        for name, cfg in external.items():
-            if name in ("smartdns", "luci_app_smartdns"):
-                continue  # 由 update_smartdns 处理
-
-            if not cfg.repo or not cfg.target:
-                continue
-
-            target_dir = self.build_dir / cfg.target
-            if target_dir.exists():
-                self.logger.skip(f"{name}: 目标目录已存在 {cfg.target}")
-                continue
-
-            self.logger.info(f"正在安装 {name}...")
-            result = subprocess.run(
-                ["git", "clone", "--depth", "1", cfg.repo, str(target_dir)],
-                capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                self.logger.warn(f"{name} 克隆失败: {result.stderr[:200]}")
-            else:
-                self.logger.ok(f"{name} 已安装到 {cfg.target}")
-
         return True

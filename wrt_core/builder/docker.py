@@ -632,17 +632,23 @@ dockerman_use_iptables() {
         else:
             self.logger.skip("dockerman 未安装，跳过")
 
-        # 6. 安装 docker 服务超时 uci-defaults
-        timeouts_src = self.base_path / "patches" / "992-docker-service-timeouts"
-        if timeouts_src.exists():
-            uci_defaults_dir = self.build_dir / "package" / "base-files" / "files" / "etc" / "uci-defaults"
-            uci_defaults_dir.mkdir(parents=True, exist_ok=True)
-            target = uci_defaults_dir / "992-docker-service-timeouts"
-            # 如果目标已存在（被 system.py 安装），先解除只读再覆盖
-            if target.exists():
-                target.chmod(0o644)
-            shutil.copy2(timeouts_src, target)
-            self.logger.ok("docker 服务超时 uci-defaults 已安装")
+        # 6. 安装 docker 服务超时 uci-defaults（来源：build.yaml 的 uci_defaults.files）
+        timeouts_entry = next(
+            (e for e in self.config.uci_defaults.files
+             if e.get("target") == "992-docker-service-timeouts"),
+            None,
+        )
+        if timeouts_entry:
+            timeouts_src = self.base_path / timeouts_entry.get("source", "")
+            if timeouts_src.exists():
+                uci_defaults_dir = self.build_dir / "package" / "base-files" / "files" / "etc" / "uci-defaults"
+                uci_defaults_dir.mkdir(parents=True, exist_ok=True)
+                target = uci_defaults_dir / timeouts_entry.get("target", "992-docker-service-timeouts")
+                # 如果目标已存在（被 system.py 安装），先解除只读再覆盖
+                if target.exists():
+                    target.chmod(0o644)
+                shutil.copy2(timeouts_src, target)
+                self.logger.ok("docker 服务超时 uci-defaults 已安装")
 
         self.logger.done("Docker 配置完成")
         return True

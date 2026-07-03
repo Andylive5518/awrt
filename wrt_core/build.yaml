@@ -56,6 +56,7 @@ packages:
       - luci-app-wechatpush
       - luci-app-usb-printer
       - luci-app-microsocks
+      - luci-app-smartdns
     net_packages:
       - xray-core
       - xray-plugin
@@ -86,6 +87,7 @@ packages:
       - microsocks
       - tuic-server
       - shadow-tls
+      - smartdns
     utils:
       - cups
       - coremark
@@ -128,45 +130,47 @@ feeds:
         - shadowsocksr-libev
         - v2dat
         - luci-app-adguardhome
-        - ddns-go
+        # - ddns-go
         - luci-app-iperf3-server
-        - luci-app-ddns-go
+        # - luci-app-ddns-go
         - taskd
         - luci-lib-xterm
         - luci-lib-taskd
         - luci-app-store
         - quickstart
         - luci-app-quickstart
-        - luci-app-istorex
-        - netdata
-        - luci-app-netdata
-        - lucky
-        - luci-app-lucky
+        # - luci-app-istorex
+        # - netdata
+        # - luci-app-netdata
+        # - lucky
+        # - luci-app-lucky
         - luci-app-openclash
         - luci-app-homeproxy
-        - luci-app-amlogic
+        # - luci-app-amlogic
         - oaf
         - open-app-filter
         - luci-app-oaf
         - easytier
         - luci-app-easytier
-        - msd_lite
-        - luci-app-msd_lite
+        # - msd_lite
+        # - luci-app-msd_lite
         - cups
         - luci-app-cupsd
         - mihomo
         - luci-app-fullconenat
         - fullconenat
         - luci-app-partexp
-        - momo
-        - luci-app-momo
+        # - momo
+        # - luci-app-momo
         - nikki
         - luci-app-nikki
         - luci-app-zerotier
-        - luci-app-wechatpush
+        # - luci-app-wechatpush
         - luci-app-autoreboot
         - mosdns
         - luci-app-mosdns
+        - smartdns
+        - luci-app-smartdns
         - luci-app-passwall
         - luci-app-passwall2
         - openwrt-bandix
@@ -184,21 +188,6 @@ feeds:
         - v2ray-core
         - v2ray-geodata
         - luci-app-quickfile
-
-  external:
-    smartdns:
-      repo: https://github.com/pymumu/openwrt-smartdns.git
-      target: feeds/packages/net/smartdns
-      patches:
-        - 100-smartdns-optimize.patch
-    luci_app_smartdns:
-      repo: https://github.com/pymumu/luci-app-smartdns.git
-      target: feeds/luci/applications/luci-app-smartdns
-      patches: []
-    luci_app_quickfile:
-      repo: https://github.com/sbwml/luci-app-quickfile.git
-      target: package/emortal/quickfile
-      patches: []
 
 # Patch 管理
 patches:
@@ -285,10 +274,17 @@ patches:
     files:
       - 016-menu-bandix.patch
 
+  # 包级补丁：复制到 feed 包的 patches/ 目录，由 OpenWrt 编译时应用到下载源码
+  smartdns:
+    target: custom_feed/smartdns
+    mode: package
+    files:
+      - 100-smartdns-optimize.patch
+
 # UCI 默认配置
 uci_defaults:
   theme: argon
-  lan_addr: 192.168.168.1
+  lan_addr: 192.168.9.71
   files:
     - source: patches/990_set_argon_primary
       target: 990_set_argon_primary

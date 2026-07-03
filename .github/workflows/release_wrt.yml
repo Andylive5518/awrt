@@ -6,7 +6,6 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  LAN_ADDR: "192.168.9.71"
 
 jobs:
   build:
@@ -42,12 +41,11 @@ jobs:
           sudo -E timedatectl set-timezone "Asia/Shanghai"
           export BUILD_DATE=$(TZ=UTC+8 date +"%y.%m.%d_%H.%M.%S")
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          INI_FILE=$(ls wrt_core/compilecfg/*.ini | head -1)
-          REPO_URL=$(awk -F"=" '/^REPO_URL=/ {print $2}' "$INI_FILE")
-          REPO_BRANCH=$(awk -F"=" '/^REPO_BRANCH=/ {print $2}' "$INI_FILE")
+          REPO_URL=$(python3 -c "import yaml;print(yaml.safe_load(open('wrt_core/build.yaml',encoding='utf-8'))['source']['repo'])")
+          REPO_BRANCH=$(python3 -c "import yaml;print(yaml.safe_load(open('wrt_core/build.yaml',encoding='utf-8'))['source']['branch'])")
+          LAN_ADDR=$(python3 -c "import yaml;print(yaml.safe_load(open('wrt_core/build.yaml',encoding='utf-8'))['uci_defaults']['lan_addr'])")
           echo "BUILD_SRC=${REPO_URL} (${REPO_BRANCH})" >> $GITHUB_ENV
-          CONFIG_NAME=$(basename "$INI_FILE" .ini)
-          echo "CONFIG_NAME=$CONFIG_NAME" >> $GITHUB_ENV
+          echo "LAN_ADDR=${LAN_ADDR}" >> $GITHUB_ENV
 
       - name: Pre Clone
         run: ./wrt_core/pre_clone_action.sh
@@ -367,7 +365,7 @@ jobs:
           echo "源码：${{ env.BUILD_SRC }}" >> release_body.txt
           echo "Kernel: ${{ env.KVER }}" >> release_body.txt
           echo "WIFI密码: 12345678" >> release_body.txt
-          echo "LAN地址: 192.168.168.1" >> release_body.txt
+          echo "LAN地址: ${{ env.LAN_ADDR }}" >> release_body.txt
           echo "插件：" >> release_body.txt
           echo "$(grep -oP "luci-app(-[a-zA-Z0-9]{1,}){1,}" ./firmware/*.manifest | awk -F":" '{print $NF}')"  >> release_body.txt
 

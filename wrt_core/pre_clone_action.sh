@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+#
+# ImmortalWrt x86_64 固件构建工具 - 预克隆阶段
+# 从 build.yaml 读取上游仓库配置并执行 git clone（build.yaml 为唯一配置源）
+#
+
+set -e
 
 # Determine wrt_core path
 if [ -d "wrt_core" ]; then
@@ -6,49 +12,39 @@ if [ -d "wrt_core" ]; then
 elif [ -d "../wrt_core" ]; then
     WRT_CORE_PATH="../wrt_core"
 else
-    # Fallback to script directory if wrt_core is current dir or relative
     WRT_CORE_PATH=$(dirname "$0")
 fi
 
 BASE_PATH=$(cd "$WRT_CORE_PATH" && pwd)
+CONFIG="$BASE_PATH/build.yaml"
 
-Dev=$1
-
-if [[ -z $Dev ]]; then
-    INI_FILE=$(ls "$BASE_PATH/compilecfg/"*.ini 2>/dev/null | head -1)
-    if [[ -z $INI_FILE ]]; then
-        echo "No INI file found in $BASE_PATH/compilecfg/"
-        exit 1
-    fi
-    Dev=$(basename "$INI_FILE" .ini)
-else
-    INI_FILE="$BASE_PATH/compilecfg/$Dev.ini"
-fi
-
-if [[ ! -f $INI_FILE ]]; then
-    echo "INI file not found: $INI_FILE"
+if [ ! -f "$CONFIG" ]; then
+    echo "Error: build.yaml not found: $CONFIG"
     exit 1
 fi
 
-read_ini_by_key() {
-    local key=$1
-    awk -F"=" -v key="$key" '$1 == key {print $2}' "$INI_FILE"
-}
+if ! python3 -c "import yaml" 2>/dev/null; then
+    echo "Error: 需要 python3 + PyYAML（运行 pip install -r wrt_core/requirements.txt）"
+    exit 1
+fi
 
-REPO_URL=$(read_ini_by_key "REPO_URL")
-REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
-REPO_BRANCH=${REPO_BRANCH:-main}
-# GitHub Actions usually runs in root of repo, so build dir should be relative to repo root
-# We need to construct absolute path or ensure context is correct.
-# Assuming this script is run from repo root or wrt_core.
-# Let's use relative path "action_build" next to wrt_core if possible or just use what works.
-# Original script used BASE_PATH/action_build.
+# 从 build.yaml 读取 source 配置（唯一配置源）
+REPO_URL=$(python3 -c "import yaml;d=yaml.safe_load(open('$CONFIG',encoding='utf-8'));print(d['source']['repo'])")
+REPO_BRANCH=$(python3 -c "import yaml;d=yaml.safe_load(open('$CONFIG',encoding='utf-8'));print(d['source']['branch'])")
+
+if [ -z "$REPO_URL" ] || [ -z "$REPO_BRANCH" ]; then
+    echo "Error: build.yaml 中 source.repo / source.branch 缺失"
+    exit 1
+fi
+
+# GitHub Actions 通常在仓库根目录运行；构建目录固定为 action_build（与 main.py 的 CI 分支一致）
 BUILD_DIR="$BASE_PATH/../action_build"
 
-echo $REPO_URL $REPO_BRANCH
-# Write flag one level up from wrt_core (repo root usually)
+echo "$REPO_URL $REPO_BRANCH"
+# 写入 repo_flag（缓存 key 用），位于 wrt_core 上一级（通常是仓库根）
 echo "$REPO_URL/$REPO_BRANCH" >"$BASE_PATH/../repo_flag"
-git clone --depth 1 -b $REPO_BRANCH $REPO_URL $BUILD_DIR
+
+git clone --depth 1 -b "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"
 
 # GitHub Action 移除国内下载源
 PROJECT_MIRRORS_FILE="$BUILD_DIR/scripts/projectsmirrors.json"

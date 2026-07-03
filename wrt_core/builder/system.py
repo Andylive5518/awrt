@@ -3,9 +3,7 @@
 UCI defaults、LAN 地址、ttyd、PBR ISP 路由、构建签名、菜单位置等。
 """
 
-import os
 import shutil
-import subprocess
 from pathlib import Path
 
 from .config import BuildConfig
@@ -84,34 +82,6 @@ class SystemConfigurator:
         self.logger.ok(f"默认 LAN 地址已更新为 {lan_addr}")
         return True
 
-    def _set_build_signature(self) -> bool:
-        """在 LuCI 状态页添加构建签名。"""
-        target = self.build_dir / "feeds" / "luci" / "modules" / "luci-mod-status" / "htdocs" / "luci-static" / "resources" / "view" / "status" / "include" / "10_system.js"
-        patch_file = self.base_path / "patches" / "013-build-signature.patch"
-
-        if not target.exists():
-            self.logger.skip("10_system.js 不存在")
-            return True
-        if not patch_file.exists():
-            self.logger.skip("build-signature patch 不存在")
-            return True
-
-        # dry-run
-        result = subprocess.run(
-            ["patch", "--dry-run", "-p1", "-d", str(target.parent), "-i", str(patch_file)],
-            capture_output=True, text=True, check=False,
-        )
-        if result.returncode != 0:
-            self.logger.skip("构建签名 patch 已存在或无法应用")
-            return True
-
-        subprocess.run(
-            ["patch", "-p1", "-d", str(target.parent), "-i", str(patch_file)],
-            capture_output=True, check=False,
-        )
-        self.logger.ok("构建签名已设置")
-        return True
-
     # ---- PBR ISP 路由 ----
 
     def _install_pbr_isp(self, isp_lower: str, isp_upper: str) -> bool:
@@ -183,49 +153,6 @@ class SystemConfigurator:
         self.logger.ok(f"PBR Makefile {isp_upper} install rule added")
         return True
 
-    def _fix_pbr_ip_forward(self) -> bool:
-        """修复 PBR IP 转发检查。"""
-        # 查找 PBR init 脚本
-        candidates = [
-            self.build_dir / "feeds" / "packages" / "net" / "pbr" / "files" / "etc" / "init.d" / "pbr",
-            self.build_dir / "package" / "feeds" / "packages" / "pbr" / "files" / "etc" / "init.d" / "pbr",
-        ]
-        init_script = None
-        for c in candidates:
-            if c.exists():
-                init_script = c
-                break
-
-        if not init_script:
-            self.logger.skip("PBR init 脚本未找到")
-            return True
-
-        patch_file = self.base_path / "patches" / "019-pbr-ip-forward.patch"
-        if not patch_file.exists():
-            self.logger.skip("PBR ip-forward patch 不存在")
-            return True
-
-        # 检查是否已修复
-        content = init_script.read_text()
-        if '-n "$strict_enforcement" ] && [ -n "$enabled" ]' in content:
-            self.logger.skip("PBR IP Forward 已修复")
-            return True
-
-        result = subprocess.run(
-            ["patch", "--dry-run", "-p1", "-d", str(init_script.parent), "-i", str(patch_file)],
-            capture_output=True, text=True, check=False,
-        )
-        if result.returncode == 0:
-            subprocess.run(
-                ["patch", "-p1", "-d", str(init_script.parent), "-i", str(patch_file)],
-                capture_output=True, check=False,
-            )
-            self.logger.ok("PBR IP Forward 已修复")
-        else:
-            self.logger.skip("PBR IP Forward patch 无法应用")
-
-        return True
-
     # ---- 其他系统配置 ----
 
     def _change_dnsmasq2full(self) -> bool:
@@ -239,80 +166,6 @@ class SystemConfigurator:
             content = content.replace("dnsmasq", "dnsmasq-full")
             target_mk.write_text(content)
             self.logger.ok("dnsmasq 已替换为 dnsmasq-full")
-        return True
-
-    def _enable_ttyd_autologin(self) -> bool:
-        """启用 TTYD 自动登录。"""
-        candidates = [
-            self.build_dir / "feeds" / "packages" / "utils" / "ttyd" / "files" / "ttyd.config",
-            self.build_dir / "package" / "feeds" / "packages" / "ttyd" / "files" / "ttyd.config",
-        ]
-        ttyd_config = None
-        for c in candidates:
-            if c.exists():
-                ttyd_config = c
-                break
-
-        if not ttyd_config:
-            self.logger.skip("ttyd.config 未找到")
-            return True
-
-        patch_file = self.base_path / "patches" / "014-ttyd-autologin.patch"
-        if not patch_file.exists():
-            self.logger.skip("ttyd autologin patch 不存在")
-            return True
-
-        result = subprocess.run(
-            ["patch", "--dry-run", "-p1", "-d", str(ttyd_config.parent), "-i", str(patch_file)],
-            capture_output=True, text=True, check=False,
-        )
-        if result.returncode == 0:
-            subprocess.run(
-                ["patch", "-p1", "-d", str(ttyd_config.parent), "-i", str(patch_file)],
-                capture_output=True, check=False,
-            )
-            self.logger.ok("TTYD 自动登录已启用")
-        else:
-            self.logger.skip("TTYD autologin patch 已存在或无法应用")
-
-        return True
-
-    def _update_menu_locations(self) -> bool:
-        """调整菜单位置（samba4, bandix）。"""
-        # samba4 菜单
-        samba4_dir = self.build_dir / "feeds" / "luci" / "applications" / "luci-app-samba4"
-        if samba4_dir.exists():
-            patch_file = self.base_path / "patches" / "015-menu-samba4.patch"
-            if patch_file.exists():
-                result = subprocess.run(
-                    ["patch", "--dry-run", "-p1", "-d", str(samba4_dir), "-i", str(patch_file)],
-                    capture_output=True, check=False,
-                )
-                if result.returncode == 0:
-                    subprocess.run(
-                        ["patch", "-p1", "-d", str(samba4_dir), "-i", str(patch_file)],
-                        capture_output=True, check=False,
-                    )
-                    self.logger.ok("samba4 菜单位置已调整")
-
-        # bandix 菜单
-        bandix_dir = self.build_dir / "package" / "feeds" / "custom_feed" / "luci-app-bandix"
-        if not bandix_dir.exists():
-            bandix_dir = self.build_dir / "custom_feed" / "luci-app-bandix"
-        if bandix_dir.exists():
-            patch_file = self.base_path / "patches" / "016-menu-bandix.patch"
-            if patch_file.exists():
-                result = subprocess.run(
-                    ["patch", "--dry-run", "-p1", "-d", str(bandix_dir), "-i", str(patch_file)],
-                    capture_output=True, check=False,
-                )
-                if result.returncode == 0:
-                    subprocess.run(
-                        ["patch", "-p1", "-d", str(bandix_dir), "-i", str(patch_file)],
-                        capture_output=True, check=False,
-                    )
-                    self.logger.ok("bandix 菜单位置已调整")
-
         return True
 
     def _fix_kconfig_recursive(self) -> bool:
@@ -424,9 +277,6 @@ boot() {
         self._fix_default_theme()
         self._update_lan_addr()
         self._change_dnsmasq2full()
-        self._set_build_signature()
-        self._enable_ttyd_autologin()
-        self._update_menu_locations()
         self._fix_kconfig_recursive()
         self._install_monitoring_scripts()
         self._install_smp_affinity()
@@ -437,7 +287,6 @@ boot() {
         for isp in self.config.pbr.isps:
             isp_upper = isp.upper()
             self._install_pbr_isp(isp, isp_upper)
-        self._fix_pbr_ip_forward()
 
         self.logger.done("系统配置完成")
         return True

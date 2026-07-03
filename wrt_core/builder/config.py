@@ -59,21 +59,14 @@ class FeedSource:
 
 
 @dataclass
-class ExternalFeed:
-    repo: str = ""
-    target: str = ""
-    patches: list[str] = field(default_factory=list)
-
-
-@dataclass
 class FeedsConfig:
     sources: list[FeedSource] = field(default_factory=list)
-    external: dict[str, ExternalFeed] = field(default_factory=dict)
 
 
 @dataclass
 class PatchDef:
     target: str = ""
+    mode: str = ""
     files: list[str] = field(default_factory=list)
 
 
@@ -199,20 +192,14 @@ def _build_config_from_dict(data: dict) -> BuildConfig:
                 branch=src.get("branch", ""),
                 packages=src.get("packages", []),
             ))
-        externals = {}
-        for name, ext in f.get("external", {}).items():
-            externals[name] = ExternalFeed(
-                repo=ext.get("repo", ""),
-                target=ext.get("target", ""),
-                patches=ext.get("patches", []),
-            )
-        config.feeds = FeedsConfig(sources=sources, external=externals)
+        config.feeds = FeedsConfig(sources=sources)
 
     if "patches" in data:
         groups = {}
         for name, pg in data["patches"].items():
             groups[name] = PatchDef(
                 target=pg.get("target", ""),
+                mode=pg.get("mode", ""),
                 files=pg.get("files", []),
             )
         config.patches = PatchesConfig(groups=groups)

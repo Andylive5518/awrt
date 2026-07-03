@@ -7,6 +7,7 @@
 4. 每个 patch 组执行时间跟踪
 """
 
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -112,6 +113,17 @@ class PatchManager:
                 results.append(PatchResult(
                     name=patch_name, target=group_config.target,
                     status="FAIL", detail="patch 文件不存在",
+                ))
+                continue
+
+            if group_config.mode == "package":
+                # 包级补丁：复制到包的 patches/ 目录，由 OpenWrt 编译时应用到下载的源码
+                pkg_patches_dir = target_dir / "patches"
+                pkg_patches_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(patch_file, pkg_patches_dir / patch_name)
+                results.append(PatchResult(
+                    name=patch_name, target=group_config.target,
+                    status="OK", detail="已安装到 patches/",
                 ))
                 continue
 
